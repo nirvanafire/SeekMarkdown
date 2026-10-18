@@ -29,7 +29,9 @@ jobs:
           - platform: Windows
             os: windows-latest
             script: dist:win
-            artifact: release/SeerMarkdown-*-win-*.exe
+            artifact: |
+              release/SeerMarkdown-*-win-*.exe
+              release/SeerMarkdown-*-win-*.zip
 
     steps:
       - name: Check out source

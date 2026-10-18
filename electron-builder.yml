@@ -20,6 +20,11 @@ win:
   icon: icon.png
   target:
     - nsis
+    - zip
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
 linux:
   category: Office
   target:

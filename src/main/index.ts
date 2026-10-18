@@ -247,6 +247,13 @@ function registerIpcHandlers(): void {
     return openMarkdownFile(window)
   })
 
+  ipcMain.handle('file:open-path', async (_event, path: unknown): Promise<OpenedFile | null> => {
+    if (typeof path !== 'string' || !isAbsolute(path)) {
+      throw new Error('文件路径无效')
+    }
+    return readOpenedFile(path)
+  })
+
   ipcMain.handle('file:save', async (event, payload: unknown): Promise<SaveResult> => {
     assertFilePayload(payload)
     await fs.writeFile(payload.path, payload.content, 'utf8')

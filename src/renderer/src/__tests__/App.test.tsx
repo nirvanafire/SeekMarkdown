@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuCommand, OpenedFile, SeerMarkdownApi } from '../../../shared/contracts'
 import App from '../App'
+import '../styles.css'
 
 vi.mock('../components/CodeEditor', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
@@ -40,6 +41,7 @@ vi.mock('../components/Preview', () => ({
 
 const api = {
   openFile: vi.fn(),
+  openDroppedFile: vi.fn(),
   saveFile: vi.fn(),
   saveFileAs: vi.fn(),
   setDirty: vi.fn(),
@@ -62,7 +64,7 @@ describe('App', () => {
     api.onCloseRequested.mockReturnValue(() => undefined)
   })
 
-  it('opens a file from the empty state and loads its content', async () => {
+  it('starts in edit mode with an empty editor and opens files from the sidebar', async () => {
     const openedFile: OpenedFile = {
       path: '/tmp/notes.md',
       name: 'notes.md',
@@ -71,37 +73,45 @@ describe('App', () => {
     api.openFile.mockResolvedValue(openedFile)
     render(<App />)
 
-    const emptyState = screen.getByText('LOCAL MARKDOWN WORKBENCH').closest('.empty-state') as HTMLElement
-    await userEvent.click(within(emptyState).getByRole('button', { name: '打开 Markdown 文件' }))
+    expect(screen.getByLabelText('markdown-editor')).toHaveValue('')
+    expect(screen.queryByTestId('preview-text')).not.toBeInTheDocument()
 
+    await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
     await waitFor(() => {
       expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 打开的文档')
     })
-    expect(screen.getByTestId('preview-text')).toHaveTextContent('# 打开的文档')
-    expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0)
+    expect(screen.getByText('notes.md')).toBeInTheDocument()
   })
 
-  it('toggles preview and routes Markdown shortcuts through the editor handle', async () => {
-    api.openFile.mockResolvedValue({
-      path: '/tmp/notes.md',
-      name: 'notes.md',
-      content: '# 原始内容'
-    })
+  it('switches between split preview and preview-only mode', async () => {
     render(<App />)
 
-    const emptyState = screen.getByText('LOCAL MARKDOWN WORKBENCH').closest('.empty-state') as HTMLElement
-    await userEvent.click(within(emptyState).getByRole('button', { name: '打开 Markdown 文件' }))
-    const editor = await screen.findByLabelText('markdown-editor')
+    expect(screen.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'false')
 
-    expect(screen.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.type(screen.getByLabelText('markdown-editor'), '# 预览内容')
+    fireEvent.click(screen.getByRole('switch', { name: '实时预览' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-text')).toBeInTheDocument()
+    })
+    expect(screen.getByLabelText('markdown-editor')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '预览模式' }))
     expect(screen.getByTestId('preview-text')).toBeInTheDocument()
+    expect(screen.queryByLabelText('markdown-editor')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '退出预览' })).toHaveAttribute('aria-pressed', 'true')
 
-    await userEvent.click(screen.getByRole('button', { name: '二级标题' }))
-    expect(editor).toHaveValue('# 原始内容\n<!--heading2-->')
+    await userEvent.click(screen.getByRole('button', { name: '退出预览' }))
+    expect(screen.getByLabelText('markdown-editor')).toBeInTheDocument()
+  })
 
-    await userEvent.click(screen.getByRole('switch', { name: '实时预览' }))
-    expect(screen.queryByTestId('preview-text')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Markdown 预览')).not.toBeInTheDocument()
+  it('can hide and restore the sidebar', async () => {
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '隐藏侧边栏' }))
+    expect(screen.getByLabelText('文档控制台').parentElement).toHaveClass('sidebar-hidden')
+
+    await userEvent.click(screen.getByRole('button', { name: '显示侧边栏' }))
+    expect(screen.getByLabelText('文档控制台').parentElement).not.toHaveClass('sidebar-hidden')
   })
 
   it('tracks dirty state and saves through the file bridge', async () => {
@@ -113,13 +123,12 @@ describe('App', () => {
     api.saveFile.mockResolvedValue({ path: '/tmp/notes.md', name: 'notes.md' })
     render(<App />)
 
-    const emptyState = screen.getByText('LOCAL MARKDOWN WORKBENCH').closest('.empty-state') as HTMLElement
-    await userEvent.click(within(emptyState).getByRole('button', { name: '打开 Markdown 文件' }))
+    await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
     const editor = await screen.findByLabelText('markdown-editor')
 
     await userEvent.clear(editor)
     await userEvent.type(editor, '# 修改后的内容')
-    expect(screen.getAllByText('未保存').length).toBeGreaterThan(0)
+    expect(screen.getByText('未保存')).toBeInTheDocument()
     expect(api.setDirty).toHaveBeenLastCalledWith(true)
 
     await userEvent.click(screen.getByRole('button', { name: '保存' }))
@@ -127,7 +136,37 @@ describe('App', () => {
       expect(api.saveFile).toHaveBeenCalledWith('/tmp/notes.md', '# 修改后的内容')
     })
     await waitFor(() => {
-      expect(screen.getAllByText('已保存').length).toBeGreaterThan(0)
+      expect(screen.getByText('已保存')).toBeInTheDocument()
+    })
+  })
+
+  it('opens a dropped file through the preload bridge', async () => {
+    const droppedFile = new File(['# 拖入的文档'], 'dropped.md')
+    api.openDroppedFile.mockResolvedValue({
+      path: '/tmp/dropped.md',
+      name: 'dropped.md',
+      content: '# 拖入的文档'
+    })
+    render(<App />)
+
+    const dataTransfer = {
+      types: ['Files'],
+      files: {
+        0: droppedFile,
+        length: 1,
+        item: (index: number) => (index === 0 ? droppedFile : null)
+      },
+      dropEffect: 'none'
+    } as unknown as DataTransfer
+    fireEvent.drop(screen.getByLabelText('文档控制台').parentElement as HTMLElement, {
+      dataTransfer
+    })
+
+    await waitFor(() => {
+      expect(api.openDroppedFile).toHaveBeenCalledWith(droppedFile)
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 拖入的文档')
     })
   })
 
@@ -146,23 +185,14 @@ describe('App', () => {
   })
 
   it('protects unsaved work when the window requests a close', async () => {
-    api.openFile.mockResolvedValue({
-      path: '/tmp/notes.md',
-      name: 'notes.md',
-      content: '# 原始内容'
-    })
     let closeListener = () => undefined
     api.onCloseRequested.mockImplementation((listener) => {
       closeListener = listener
       return () => undefined
     })
-
     render(<App />)
-    const emptyState = screen.getByText('LOCAL MARKDOWN WORKBENCH').closest('.empty-state') as HTMLElement
-    await userEvent.click(within(emptyState).getByRole('button', { name: '打开 Markdown 文件' }))
-    const editor = await screen.findByLabelText('markdown-editor')
-    await userEvent.type(editor, ' 修改')
 
+    await userEvent.type(screen.getByLabelText('markdown-editor'), '# 未保存')
     closeListener()
 
     expect(await screen.findByRole('dialog')).toHaveTextContent('保留这次修改吗？')

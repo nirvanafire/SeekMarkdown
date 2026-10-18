@@ -4,6 +4,7 @@ import {
   CircleAlert,
   Code2,
   Columns2,
+  Eye,
   FileDown,
   FileText,
   FolderOpen,
@@ -13,6 +14,8 @@ import {
   ListOrdered,
   ListTodo,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Quote,
   Redo2,
   RefreshCw,
@@ -20,6 +23,7 @@ import {
   SquareCode,
   Table2,
   Undo2,
+  Upload,
   X
 } from 'lucide-react'
 import {
@@ -28,6 +32,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import CodeEditor, { type CodeEditorHandle } from './components/CodeEditor'
@@ -69,10 +74,15 @@ export default function App(): JSX.Element {
   const [prompt, setPrompt] = useState<PromptKind | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [splitPercent, setSplitPercent] = useState(50)
-  const [previewEnabled, setPreviewEnabled] = useState(true)
+  const [previewEnabled, setPreviewEnabled] = useState(false)
+  const [previewOnly, setPreviewOnly] = useState(false)
+  const [sidebarVisible, setSidebarVisible] = useState(true)
+  const [fileDragActive, setFileDragActive] = useState(false)
   const workspaceRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<CodeEditorHandle | null>(null)
   const draggingSplitRef = useRef(false)
+  const pendingDroppedFileRef = useRef<File | null>(null)
+  const dragDepthRef = useRef(0)
   const noticeTimerRef = useRef<number | null>(null)
 
   const dirty = useMemo(() => content !== savedContent, [content, savedContent])
@@ -91,6 +101,7 @@ export default function App(): JSX.Element {
   }, [])
 
   const loadFile = useCallback((nextFile: OpenedFile) => {
+    pendingDroppedFileRef.current = null
     setFile(nextFile)
     setContent(nextFile.content)
     setSavedContent(nextFile.content)
@@ -108,6 +119,20 @@ export default function App(): JSX.Element {
       showNotice(getErrorMessage(error), 'error')
     }
   }, [loadFile, showNotice])
+
+  const openDroppedFile = useCallback(
+    async (droppedFile: File) => {
+      try {
+        const nextFile = await window.seerMarkdown.openDroppedFile(droppedFile)
+        if (nextFile) {
+          loadFile(nextFile)
+        }
+      } catch (error) {
+        showNotice(getErrorMessage(error), 'error')
+      }
+    },
+    [loadFile, showNotice]
+  )
 
   const saveFileAs = useCallback(async (): Promise<boolean> => {
     const contentToSave = content
@@ -158,12 +183,25 @@ export default function App(): JSX.Element {
   }, [content, file, saveFileAs, showNotice])
 
   const requestOpen = useCallback(() => {
+    pendingDroppedFileRef.current = null
     if (dirty) {
       setPrompt('open')
       return
     }
     void performOpen()
   }, [dirty, performOpen])
+
+  const requestDroppedFile = useCallback(
+    (droppedFile: File) => {
+      if (dirty) {
+        pendingDroppedFileRef.current = droppedFile
+        setPrompt('open')
+        return
+      }
+      void openDroppedFile(droppedFile)
+    },
+    [dirty, openDroppedFile]
+  )
 
   const requestSave = useCallback(() => {
     void persistCurrent()
@@ -177,6 +215,7 @@ export default function App(): JSX.Element {
     async (choice: PromptChoice) => {
       const activePrompt = prompt
       if (!activePrompt || choice === 'cancel') {
+        pendingDroppedFileRef.current = null
         setPrompt(null)
         if (activePrompt === 'close') {
           window.seerMarkdown.completeClose('cancelled')
@@ -184,15 +223,21 @@ export default function App(): JSX.Element {
         return
       }
 
+      const droppedFile = pendingDroppedFileRef.current
+      pendingDroppedFileRef.current = null
+
       if (choice === 'save') {
         const saved = await persistCurrent()
         if (!saved) {
+          pendingDroppedFileRef.current = droppedFile
           return
         }
 
         setPrompt(null)
         if (activePrompt === 'close') {
           window.seerMarkdown.completeClose('saved')
+        } else if (droppedFile) {
+          await openDroppedFile(droppedFile)
         } else {
           await performOpen()
         }
@@ -202,11 +247,13 @@ export default function App(): JSX.Element {
       setPrompt(null)
       if (activePrompt === 'close') {
         window.seerMarkdown.completeClose('discard')
+      } else if (droppedFile) {
+        await openDroppedFile(droppedFile)
       } else {
         await performOpen()
       }
     },
-    [performOpen, prompt, persistCurrent]
+    [openDroppedFile, performOpen, prompt, persistCurrent]
   )
 
   useEffect(() => {
@@ -274,18 +321,93 @@ export default function App(): JSX.Element {
     }
   }
 
+  const hasDraggedFiles = (event: ReactDragEvent<HTMLElement>): boolean => {
+    return Array.from(event.dataTransfer.types).includes('Files')
+  }
+
+  const handleFileDragEnter = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    dragDepthRef.current += 1
+    setFileDragActive(true)
+  }
+
+  const handleFileDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleFileDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) {
+      setFileDragActive(false)
+    }
+  }
+
+  const handleFileDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    dragDepthRef.current = 0
+    setFileDragActive(false)
+
+    const droppedFiles = Array.from(event.dataTransfer.files)
+    if (droppedFiles.length !== 1) {
+      showNotice('一次只能拖入一个文件', 'error')
+      return
+    }
+    requestDroppedFile(droppedFiles[0])
+  }
+
   const statusLabel = savePhase === 'saving' ? '正在保存' : dirty ? '未保存' : file ? '已保存' : '就绪'
   const statusTone = savePhase === 'saving' ? 'saving' : dirty ? 'dirty' : file ? 'saved' : 'idle'
-  const formatDisabled = !file && !content
+  const formatDisabled = false
+  const showSource = !previewOnly
+  const showPreview = previewEnabled || previewOnly
+  const splitView = showSource && showPreview
 
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${sidebarVisible ? '' : 'sidebar-hidden'}`}
+      onDragEnter={handleFileDragEnter}
+      onDragOver={handleFileDragOver}
+      onDragLeave={handleFileDragLeave}
+      onDrop={handleFileDrop}
+    >
+      {!sidebarVisible && (
+        <NeuIconButton
+          className="sidebar-show-button"
+          label="显示侧边栏"
+          title="显示侧边栏"
+          onClick={() => setSidebarVisible(true)}
+        >
+          <PanelLeftOpen aria-hidden="true" />
+        </NeuIconButton>
+      )}
+
       <NeuPanel as="aside" surface="raised" className="sidebar" aria-label="文档控制台">
         <div className="sidebar-brand" aria-label="SeerMarkdown">
           <span className="brand-mark">S/M</span>
           <span className="brand-name">
             Seer<span>Markdown</span>
           </span>
+          <NeuIconButton
+            className="sidebar-hide-button"
+            label="隐藏侧边栏"
+            title="隐藏侧边栏"
+            onClick={() => setSidebarVisible(false)}
+          >
+            <PanelLeftClose aria-hidden="true" />
+          </NeuIconButton>
         </div>
 
         <NeuPanel surface="inset" className="sidebar-document">
@@ -294,11 +416,6 @@ export default function App(): JSX.Element {
             <strong>{file?.name ?? '未打开文件'}</strong>
             <span title={file?.path ?? ''}>{file?.path ?? '本地 Markdown 文档'}</span>
           </div>
-          <NeuStatus
-            className={`dirty-indicator ${statusTone}`}
-            tone={statusTone}
-            label={statusLabel}
-          />
         </NeuPanel>
 
         <section className="sidebar-section" aria-labelledby="file-tools-title">
@@ -322,12 +439,23 @@ export default function App(): JSX.Element {
             checked={previewEnabled}
             onCheckedChange={setPreviewEnabled}
             label="实时预览"
-            description={previewEnabled ? '分栏显示' : '专注编辑'}
+            description={previewOnly ? '预览模式' : previewEnabled ? '分栏显示' : '专注编辑'}
           />
+          <NeuButton
+            variant={previewOnly ? 'primary' : 'secondary'}
+            size="sm"
+            className="sidebar-wide-button"
+            pressed={previewOnly}
+            onClick={() => setPreviewOnly((value) => !value)}
+          >
+            <Eye aria-hidden="true" />
+            {previewOnly ? '退出预览' : '预览模式'}
+          </NeuButton>
           <NeuButton
             variant="secondary"
             size="sm"
             className="sidebar-wide-button"
+            disabled={!splitView}
             onClick={() => setSplitPercent(50)}
           >
             <Columns2 aria-hidden="true" />
@@ -490,7 +618,7 @@ export default function App(): JSX.Element {
             <span>文档状态</span>
             <span>UTF-8</span>
           </div>
-          <NeuStatus tone={statusTone} label={statusLabel} />
+          <NeuStatus className={`dirty-indicator ${statusTone}`} tone={statusTone} label={statusLabel} />
           <div className="sidebar-metrics">
             <span>{characterCount} 字符</span>
             <span>{content.split(/\r?\n/).length} 行</span>
@@ -499,14 +627,15 @@ export default function App(): JSX.Element {
       </NeuPanel>
 
       <main
-        className={`workspace ${previewEnabled ? '' : 'workspace--preview-off'}`}
+        className={`workspace ${splitView ? '' : 'workspace--single-panel'}`}
         ref={workspaceRef}
         style={{
-          gridTemplateColumns: previewEnabled
+          gridTemplateColumns: splitView
             ? `${splitPercent}fr 10px ${100 - splitPercent}fr`
             : 'minmax(0, 1fr)'
         }}
       >
+        {showSource && (
         <NeuPanel
           as="section"
           surface="raised"
@@ -521,71 +650,64 @@ export default function App(): JSX.Element {
             <span>Markdown</span>
           </div>
           <div className="panel-body">
-            {file || content ? (
-              <CodeEditor ref={editorRef} value={content} onChange={setContent} />
-            ) : (
-              <div className="empty-state">
-                <div className="empty-rule" aria-hidden="true" />
-                <p className="eyebrow">LOCAL MARKDOWN WORKBENCH</p>
-                <h1>
-                  Seer<span>Markdown</span>
-                </h1>
-                <p className="empty-description">安静地查看、书写和保存本地 Markdown 文档。</p>
-                <NeuButton variant="primary" onClick={requestOpen}>
-                  <FolderOpen aria-hidden="true" />
-                  打开 Markdown 文件
-                </NeuButton>
-                <p className="empty-meta">支持 .md / .markdown / .mdown</p>
-              </div>
-            )}
+            <CodeEditor ref={editorRef} value={content} onChange={setContent} />
           </div>
         </NeuPanel>
+        )}
 
-        {previewEnabled && (
-          <>
-            <div
-              className="split-handle"
-              role="separator"
-              aria-label="调整编辑器与预览宽度"
-              aria-orientation="vertical"
-              aria-valuenow={Math.round(splitPercent)}
-              aria-valuemin={28}
-              aria-valuemax={72}
-              onPointerDown={handleSplitPointerDown}
-              onPointerMove={handleSplitPointerMove}
-              onPointerUp={handleSplitPointerUp}
-              onPointerCancel={handleSplitPointerUp}
-            >
-              <i aria-hidden="true" />
+        {splitView && (
+          <div
+            className="split-handle"
+            role="separator"
+            aria-label="调整编辑器与预览宽度"
+            aria-orientation="vertical"
+            aria-valuenow={Math.round(splitPercent)}
+            aria-valuemin={28}
+            aria-valuemax={72}
+            onPointerDown={handleSplitPointerDown}
+            onPointerMove={handleSplitPointerMove}
+            onPointerUp={handleSplitPointerUp}
+            onPointerCancel={handleSplitPointerUp}
+          >
+            <i aria-hidden="true" />
+          </div>
+        )}
+
+        {showPreview && (
+          <NeuPanel
+            as="section"
+            surface="raised"
+            className="preview-panel"
+            aria-label="Markdown 预览"
+          >
+            <div className="panel-heading preview-heading">
+              <div>
+                <span className="panel-index">02</span>
+                <h2>预览</h2>
+              </div>
+              <span>{file || content ? '实时渲染' : '等待内容'}</span>
             </div>
-
-            <NeuPanel
-              as="section"
-              surface="raised"
-              className="preview-panel"
-              aria-label="Markdown 预览"
-            >
-              <div className="panel-heading preview-heading">
-                <div>
-                  <span className="panel-index">02</span>
-                  <h2>预览</h2>
+            <div className="panel-body preview-scroll">
+              {content ? (
+                <Preview content={content} />
+              ) : (
+                <div className="preview-empty">
+                  <RefreshCw aria-hidden="true" />
+                  <p>预览会随着源码输入即时更新</p>
                 </div>
-                <span>{file || content ? '实时渲染' : '等待内容'}</span>
-              </div>
-              <div className="panel-body preview-scroll">
-                {content ? (
-                  <Preview content={content} />
-                ) : (
-                  <div className="preview-empty">
-                    <RefreshCw aria-hidden="true" />
-                    <p>预览会随着源码输入即时更新</p>
-                  </div>
-                )}
-              </div>
-            </NeuPanel>
-          </>
+              )}
+            </div>
+          </NeuPanel>
         )}
       </main>
+
+      {fileDragActive && (
+        <div className="drop-overlay" role="status">
+          <Upload aria-hidden="true" />
+          <strong>松开以打开文件</strong>
+          <span>一次只能打开一个文件</span>
+        </div>
+      )}
 
       {notice && (
         <NeuPanel surface="raised" className={`toast ${notice.tone}`} role="status">

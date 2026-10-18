@@ -16,6 +16,10 @@ test('launches, edits, saves, and protects unsaved Markdown', async () => {
 
   await expect(page.locator('.brand-name')).toContainText('SeerMarkdown')
   await expect(page.locator('.document-copy strong')).toHaveText('sample.md')
+  await expect(page.locator('.editor-panel')).toBeVisible()
+  await expect(page.locator('.preview-panel')).toHaveCount(0)
+
+  await page.getByRole('switch', { name: '实时预览' }).click()
   await expect(page.locator('.markdown-preview h1')).toHaveText('初始文档')
 
   const editor = page.locator('.cm-content')
@@ -65,8 +69,10 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   })
   const page = await app.firstWindow()
 
-  await expect(page.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.sidebar')).toBeVisible()
+
+  await page.getByRole('switch', { name: '实时预览' }).click()
 
   await page.locator('.cm-content').click()
   await page.keyboard.press('ControlOrMeta+A')
@@ -84,10 +90,20 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   await page.locator('button[title="代码块"]').click()
   await expect(page.locator('.markdown-preview pre')).toBeVisible()
 
+  await page.getByRole('button', { name: '预览模式' }).click()
+  await expect(page.locator('.editor-panel')).toHaveCount(0)
+  await expect(page.locator('.preview-panel')).toBeVisible()
+
+  await page.getByRole('button', { name: '退出预览' }).click()
   await page.getByRole('switch', { name: '实时预览' }).click()
   await expect(page.locator('.preview-panel')).toHaveCount(0)
   await expect(page.locator('.split-handle')).toHaveCount(0)
   await expect(page.locator('.editor-panel')).toBeVisible()
+
+  await page.getByRole('button', { name: '隐藏侧边栏' }).click()
+  await expect(page.locator('.sidebar')).toBeHidden()
+  await page.getByRole('button', { name: '显示侧边栏' }).click()
+  await expect(page.locator('.sidebar')).toBeVisible()
 
   await page.screenshot({ path: '/tmp/seermarkdown-sidebar.png', fullPage: true })
 

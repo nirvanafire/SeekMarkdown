@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   CloseDecision,
   MenuCommand,
@@ -9,6 +9,10 @@ import type {
 
 const api: SeerMarkdownApi = {
   openFile: () => ipcRenderer.invoke('file:open'),
+  openDroppedFile: (file) => {
+    const path = webUtils.getPathForFile(file)
+    return path ? ipcRenderer.invoke('file:open-path', path) : Promise.resolve(null)
+  },
   saveFile: (path, content) => ipcRenderer.invoke('file:save', { path, content }),
   saveFileAs: (content, suggestedName) =>
     ipcRenderer.invoke('file:save-as', { content, suggestedName }),

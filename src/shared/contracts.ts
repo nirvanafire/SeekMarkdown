@@ -15,6 +15,7 @@ export type MenuCommand = 'open' | 'save' | 'save-as'
 
 export interface SeerMarkdownApi {
   openFile(): Promise<OpenedFile | null>
+  openDroppedFile(file: File): Promise<OpenedFile | null>
   saveFile(path: string, content: string): Promise<SaveResult>
   saveFileAs(content: string, suggestedName: string): Promise<OpenedFile | null>
   setDirty(dirty: boolean): void
