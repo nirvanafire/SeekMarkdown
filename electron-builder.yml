@@ -9,6 +9,7 @@ files:
 asar: true
 electronDist: node_modules/electron/dist
 icon: icon.png
+publish: null
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 mac:
   icon: icon.png

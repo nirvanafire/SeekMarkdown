@@ -52,4 +52,4 @@ npm run dist:mac  # macOS DMG
 npm run dist:win  # Windows NSIS EXE
 ```
 
-GitHub Actions Workflow 会在版本 Tag、Pull Request 或手动触发时构建 macOS 和 Windows 安装包，并在 Actions 页面上传产物。当前产物未进行代码签名或公证。
+GitHub Actions Workflow 会在版本 Tag、Pull Request 或手动触发时构建 macOS 和 Windows 安装包，并在 Actions 页面上传产物。构建脚本显式使用 `--publish never`，不会要求 GitHub Personal Access Token。当前产物未进行代码签名或公证。
