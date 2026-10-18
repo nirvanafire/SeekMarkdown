@@ -104,14 +104,20 @@ describe('App', () => {
     expect(screen.getByLabelText('markdown-editor')).toBeInTheDocument()
   })
 
-  it('can hide and restore the sidebar', async () => {
+  it('collapses and restores the sidebar icon rail', async () => {
     render(<App />)
 
-    await userEvent.click(screen.getByRole('button', { name: '隐藏侧边栏' }))
-    expect(screen.getByLabelText('文档控制台').parentElement).toHaveClass('sidebar-hidden')
+    await userEvent.click(screen.getByRole('button', { name: '收起侧边栏' }))
+    expect(screen.getByLabelText('文档控制台').parentElement).toHaveClass('sidebar-collapsed')
+    expect(screen.getByLabelText('文档控制台')).toBeVisible()
+    expect(screen.queryByText('格式')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开 Markdown 文件' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '预览模式' })).toBeVisible()
+    expect(screen.queryByText('未打开文件')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: '显示侧边栏' }))
-    expect(screen.getByLabelText('文档控制台').parentElement).not.toHaveClass('sidebar-hidden')
+    await userEvent.click(screen.getByRole('button', { name: '展开侧边栏' }))
+    expect(screen.getByLabelText('文档控制台').parentElement).not.toHaveClass('sidebar-collapsed')
+    expect(screen.getByText('格式')).toBeVisible()
   })
 
   it('tracks dirty state and saves through the file bridge', async () => {

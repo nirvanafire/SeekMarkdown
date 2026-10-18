@@ -100,10 +100,12 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   await expect(page.locator('.split-handle')).toHaveCount(0)
   await expect(page.locator('.editor-panel')).toBeVisible()
 
-  await page.getByRole('button', { name: '隐藏侧边栏' }).click()
-  await expect(page.locator('.sidebar')).toBeHidden()
-  await page.getByRole('button', { name: '显示侧边栏' }).click()
-  await expect(page.locator('.sidebar')).toBeVisible()
+  await page.getByRole('button', { name: '收起侧边栏' }).click()
+  await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
+  await expect(page.locator('.format-section')).toHaveCount(0)
+  await expect(page.locator('.window-drag-region')).toBeVisible()
+  await page.getByRole('button', { name: '展开侧边栏' }).click()
+  await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
 
   await page.screenshot({ path: '/tmp/seermarkdown-sidebar.png', fullPage: true })
 

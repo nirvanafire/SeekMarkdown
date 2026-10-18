@@ -49,6 +49,13 @@ describe('Neumorphism primitives', () => {
     expect(screen.getByText('未保存').parentElement).toHaveClass('neu-status--dirty')
     expect(screen.getByText('未保存').parentElement).toHaveAttribute('data-tone', 'dirty')
   })
+
+  it('supports compact status indicators without losing accessible text', () => {
+    render(<NeuStatus tone="saved" label="已保存" compact />)
+
+    expect(screen.getByLabelText('已保存')).toHaveClass('neu-status--compact')
+    expect(screen.getByText('已保存')).toHaveClass('sr-only')
+  })
 })
 
 describe('NeuToggle', () => {

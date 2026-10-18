@@ -314,6 +314,16 @@ function createWindow(initialFilePath?: string): void {
     minWidth: 900,
     minHeight: 620,
     show: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay:
+      process.platform === 'darwin'
+        ? undefined
+        : {
+            color: '#e7e4dc',
+            symbolColor: '#26312c',
+            height: 36
+          },
     backgroundColor: '#f4f2ec',
     title: 'SeerMarkdown',
     webPreferences: {
@@ -326,6 +336,9 @@ function createWindow(initialFilePath?: string): void {
 
   getCloseState(window)
   configureWindowSecurity(window)
+  if (process.platform === 'darwin') {
+    window.setWindowButtonVisibility(true)
+  }
 
   window.once('ready-to-show', () => {
     window.show()

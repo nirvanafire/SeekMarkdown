@@ -76,7 +76,7 @@ export default function App(): JSX.Element {
   const [splitPercent, setSplitPercent] = useState(50)
   const [previewEnabled, setPreviewEnabled] = useState(false)
   const [previewOnly, setPreviewOnly] = useState(false)
-  const [sidebarVisible, setSidebarVisible] = useState(true)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const workspaceRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<CodeEditorHandle | null>(null)
@@ -377,46 +377,50 @@ export default function App(): JSX.Element {
 
   return (
     <div
-      className={`app-shell ${sidebarVisible ? '' : 'sidebar-hidden'}`}
+      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
       onDragEnter={handleFileDragEnter}
       onDragOver={handleFileDragOver}
       onDragLeave={handleFileDragLeave}
       onDrop={handleFileDrop}
     >
-      {!sidebarVisible && (
-        <NeuIconButton
-          className="sidebar-show-button"
-          label="显示侧边栏"
-          title="显示侧边栏"
-          onClick={() => setSidebarVisible(true)}
-        >
-          <PanelLeftOpen aria-hidden="true" />
-        </NeuIconButton>
-      )}
+      <div className="window-drag-region" aria-hidden="true" />
 
-      <NeuPanel as="aside" surface="raised" className="sidebar" aria-label="文档控制台">
+      <NeuPanel
+        as="aside"
+        surface="raised"
+        className={`sidebar ${sidebarCollapsed ? 'sidebar--collapsed' : ''}`}
+        aria-label="文档控制台"
+      >
         <div className="sidebar-brand" aria-label="SeerMarkdown">
           <span className="brand-mark">S/M</span>
-          <span className="brand-name">
-            Seer<span>Markdown</span>
-          </span>
+          {!sidebarCollapsed && (
+            <span className="brand-name">
+              Seer<span>Markdown</span>
+            </span>
+          )}
           <NeuIconButton
-            className="sidebar-hide-button"
-            label="隐藏侧边栏"
-            title="隐藏侧边栏"
-            onClick={() => setSidebarVisible(false)}
+            className="sidebar-toggle-button"
+            label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            onClick={() => setSidebarCollapsed((value) => !value)}
           >
-            <PanelLeftClose aria-hidden="true" />
+            {sidebarCollapsed ? (
+              <PanelLeftOpen aria-hidden="true" />
+            ) : (
+              <PanelLeftClose aria-hidden="true" />
+            )}
           </NeuIconButton>
         </div>
 
-        <NeuPanel surface="inset" className="sidebar-document">
-          <FileText aria-hidden="true" />
-          <div className="document-copy">
-            <strong>{file?.name ?? '未打开文件'}</strong>
-            <span title={file?.path ?? ''}>{file?.path ?? '本地 Markdown 文档'}</span>
-          </div>
-        </NeuPanel>
+        {!sidebarCollapsed && (
+          <NeuPanel surface="inset" className="sidebar-document">
+            <FileText aria-hidden="true" />
+            <div className="document-copy">
+              <strong>{file?.name ?? '未打开文件'}</strong>
+              <span title={file?.path ?? ''}>{file?.path ?? '本地 Markdown 文档'}</span>
+            </div>
+          </NeuPanel>
+        )}
 
         <section className="sidebar-section" aria-labelledby="file-tools-title">
           <h2 id="file-tools-title">文件</h2>
@@ -445,6 +449,8 @@ export default function App(): JSX.Element {
             variant={previewOnly ? 'primary' : 'secondary'}
             size="sm"
             className="sidebar-wide-button"
+            title={previewOnly ? '退出预览' : '预览模式'}
+            aria-label={previewOnly ? '退出预览' : '预览模式'}
             pressed={previewOnly}
             onClick={() => setPreviewOnly((value) => !value)}
           >
@@ -455,6 +461,8 @@ export default function App(): JSX.Element {
             variant="secondary"
             size="sm"
             className="sidebar-wide-button"
+            title="重置分栏"
+            aria-label="重置分栏"
             disabled={!splitView}
             onClick={() => setSplitPercent(50)}
           >
@@ -463,6 +471,7 @@ export default function App(): JSX.Element {
           </NeuButton>
         </section>
 
+        {!sidebarCollapsed && (
         <section className="sidebar-section format-section" aria-labelledby="format-tools-title">
           <h2 id="format-tools-title">格式</h2>
           <div className="format-grid" role="toolbar" aria-label="Markdown 格式工具">
@@ -612,17 +621,27 @@ export default function App(): JSX.Element {
             </NeuIconButton>
           </div>
         </section>
+        )}
 
         <NeuPanel surface="inset" className="sidebar-status">
-          <div className="sidebar-status-heading">
-            <span>文档状态</span>
-            <span>UTF-8</span>
-          </div>
-          <NeuStatus className={`dirty-indicator ${statusTone}`} tone={statusTone} label={statusLabel} />
-          <div className="sidebar-metrics">
-            <span>{characterCount} 字符</span>
-            <span>{content.split(/\r?\n/).length} 行</span>
-          </div>
+          {!sidebarCollapsed && (
+            <div className="sidebar-status-heading">
+              <span>文档状态</span>
+              <span>UTF-8</span>
+            </div>
+          )}
+          <NeuStatus
+            className={`dirty-indicator ${statusTone}`}
+            tone={statusTone}
+            label={statusLabel}
+            compact={sidebarCollapsed}
+          />
+          {!sidebarCollapsed && (
+            <div className="sidebar-metrics">
+              <span>{characterCount} 字符</span>
+              <span>{content.split(/\r?\n/).length} 行</span>
+            </div>
+          )}
         </NeuPanel>
       </NeuPanel>
 
