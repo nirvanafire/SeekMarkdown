@@ -70,7 +70,7 @@ type PendingOpen =
   | { kind: 'drop'; file: File }
 
 const historyStorageKey = 'seermarkdown.file-history'
-const historyLimit = 50
+const historyLimit = 20
 
 function readHistory(): FileHistoryEntry[] {
   try {

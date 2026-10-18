@@ -86,13 +86,15 @@ describe('App', () => {
   })
 
   it('shows file history in reverse chronological order and opens an entry', async () => {
-    window.localStorage.setItem(
-      'seermarkdown.file-history',
-      JSON.stringify([
-        { path: '/tmp/old.md', name: 'old.md', openedAt: 1000 },
-        { path: '/tmp/new.md', name: 'new.md', openedAt: 2000 }
-      ])
-    )
+    const storedHistory = [
+      { path: '/tmp/new.md', name: 'new.md', openedAt: 2000 },
+      ...Array.from({ length: 20 }, (_, index) => ({
+        path: `/tmp/old-${index}.md`,
+        name: `old-${index}.md`,
+        openedAt: 1000 - index
+      }))
+    ]
+    window.localStorage.setItem('seermarkdown.file-history', JSON.stringify(storedHistory))
     api.openFileByPath.mockResolvedValue({
       path: '/tmp/new.md',
       name: 'new.md',
@@ -105,8 +107,10 @@ describe('App', () => {
     const historyItems = within(historyDialog).getAllByRole('button').filter((button) => {
       return button.getAttribute('class') === 'history-item'
     })
+    expect(historyItems).toHaveLength(20)
     expect(historyItems[0]).toHaveTextContent('new.md')
-    expect(historyItems[1]).toHaveTextContent('old.md')
+    expect(historyItems[1]).toHaveTextContent('old-0.md')
+    expect(historyItems.at(-1)).not.toHaveTextContent('old-19.md')
 
     await userEvent.click(historyItems[0])
     await waitFor(() => {
