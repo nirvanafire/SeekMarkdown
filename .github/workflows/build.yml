@@ -19,10 +19,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - platform: macOS
-            os: macos-13
+            os: macos-latest
             script: dist:mac
             artifact: release/SeerMarkdown-*-mac-*.dmg
           - platform: Windows
