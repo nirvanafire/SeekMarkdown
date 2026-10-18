@@ -121,3 +121,45 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   })
   await app.close()
 })
+
+test('reads a persistent reading list in order', async () => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'seermarkdown-reading-list-e2e-'))
+  const paths = await Promise.all(
+    ['one.md', 'two.md', 'three.md'].map(async (name) => {
+      const path = join(workingDirectory, name)
+      await writeFile(path, `# ${name}`, 'utf8')
+      return { path, name }
+    })
+  )
+
+  const app = await electron.launch({
+    args: [resolve('out/main/index.js'), paths[0].path]
+  })
+  const page = await app.firstWindow()
+  await page.evaluate((items) => {
+    window.localStorage.setItem('seermarkdown.reading-list', JSON.stringify(items))
+  }, paths)
+  await page.reload()
+
+  await page.getByRole('button', { name: '打开阅读列表' }).click()
+  const readingDialog = page.getByRole('dialog', { name: '阅读列表' })
+  await expect(readingDialog.locator('.reading-list-item').nth(0)).toContainText('one.md')
+  await expect(readingDialog.locator('.reading-list-item').nth(1)).toContainText('two.md')
+  await expect(readingDialog.locator('.reading-list-item').nth(2)).toContainText('three.md')
+
+  await readingDialog.getByRole('button', { name: '下一个' }).click()
+  await expect(page.locator('.document-copy strong')).toHaveText('two.md')
+  await readingDialog.getByRole('button', { name: '下一个' }).click()
+  await expect(page.locator('.document-copy strong')).toHaveText('three.md')
+  await expect(readingDialog.getByRole('button', { name: '下一个' })).toBeDisabled()
+
+  await readingDialog.getByRole('button', { name: '上一个' }).click()
+  await expect(page.locator('.document-copy strong')).toHaveText('two.md')
+
+  await app.evaluate(({ BrowserWindow }) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.destroy()
+    }
+  })
+  await app.close()
+})

@@ -13,6 +13,7 @@ import {
 } from 'electron'
 import type {
   CloseDecision,
+  FileInfo,
   MenuCommand,
   OpenedFile,
   SaveResult
@@ -64,14 +65,16 @@ async function readOpenedFile(path: string): Promise<OpenedFile> {
   return { path, name: basename(path), content }
 }
 
+const markdownDialogFilters = [
+  { name: 'Markdown', extensions: ['md', 'markdown', 'mdown'] },
+  { name: '所有文件', extensions: ['*'] }
+]
+
 async function openMarkdownFile(window: BrowserWindow): Promise<OpenedFile | null> {
   const result = await dialog.showOpenDialog(window, {
     title: '打开 Markdown 文件',
     properties: ['openFile'],
-    filters: [
-      { name: 'Markdown', extensions: ['md', 'markdown', 'mdown'] },
-      { name: '所有文件', extensions: ['*'] }
-    ]
+    filters: markdownDialogFilters
   })
 
   if (result.canceled || result.filePaths.length === 0) {
@@ -79,6 +82,20 @@ async function openMarkdownFile(window: BrowserWindow): Promise<OpenedFile | nul
   }
 
   return readOpenedFile(result.filePaths[0])
+}
+
+async function selectMarkdownFiles(window: BrowserWindow): Promise<FileInfo[]> {
+  const result = await dialog.showOpenDialog(window, {
+    title: '添加到阅读列表',
+    properties: ['openFile', 'multiSelections'],
+    filters: markdownDialogFilters
+  })
+
+  if (result.canceled) {
+    return []
+  }
+
+  return result.filePaths.map((path) => ({ path, name: basename(path) }))
 }
 
 function withMarkdownExtension(path: string): string {
@@ -245,6 +262,14 @@ function registerIpcHandlers(): void {
       return null
     }
     return openMarkdownFile(window)
+  })
+
+  ipcMain.handle('file:select', async (event): Promise<FileInfo[]> => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) {
+      return []
+    }
+    return selectMarkdownFiles(window)
   })
 
   ipcMain.handle('file:open-path', async (_event, path: unknown): Promise<OpenedFile | null> => {

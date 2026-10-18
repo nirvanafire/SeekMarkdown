@@ -1,6 +1,8 @@
 import {
   Bold,
   Check,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Code2,
   Columns2,
@@ -14,9 +16,11 @@ import {
   List,
   ListOrdered,
   ListTodo,
+  ListVideo,
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Quote,
   Redo2,
   RefreshCw,
@@ -46,7 +50,7 @@ import {
   NeuToggle
 } from './components/neumorphic'
 import type { EditorAction } from './editor/markdownCommands'
-import type { OpenedFile } from '../../shared/contracts'
+import type { FileInfo, OpenedFile } from '../../shared/contracts'
 
 type SavePhase = 'idle' | 'saving'
 type PromptKind = 'open' | 'close'
@@ -71,6 +75,43 @@ type PendingOpen =
 
 const historyStorageKey = 'seermarkdown.file-history'
 const historyLimit = 20
+const readingListStorageKey = 'seermarkdown.reading-list'
+
+function mergeReadingList(current: FileInfo[], additions: FileInfo[]): FileInfo[] {
+  const merged = [...current]
+  const paths = new Set(current.map((item) => item.path))
+
+  for (const item of additions) {
+    if (!paths.has(item.path)) {
+      merged.push(item)
+      paths.add(item.path)
+    }
+  }
+
+  return merged
+}
+
+function readReadingList(): FileInfo[] {
+  try {
+    const raw = window.localStorage.getItem(readingListStorageKey)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    const items = parsed.filter((item): item is FileInfo => {
+      return (
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as FileInfo).path === 'string' &&
+        typeof (item as FileInfo).name === 'string'
+      )
+    })
+    return mergeReadingList([], items)
+  } catch {
+    return []
+  }
+}
 
 function readHistory(): FileHistoryEntry[] {
   try {
@@ -129,11 +170,15 @@ export default function App(): JSX.Element {
   const [fileDragActive, setFileDragActive] = useState(false)
   const [history, setHistory] = useState<FileHistoryEntry[]>(readHistory)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [readingList, setReadingList] = useState<FileInfo[]>(readReadingList)
+  const [readingListOpen, setReadingListOpen] = useState(false)
+  const [readingListDragActive, setReadingListDragActive] = useState(false)
   const workspaceRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<CodeEditorHandle | null>(null)
   const draggingSplitRef = useRef(false)
   const pendingOpenRef = useRef<PendingOpen | null>(null)
   const dragDepthRef = useRef(0)
+  const readingListDragDepthRef = useRef(0)
   const noticeTimerRef = useRef<number | null>(null)
 
   const dirty = useMemo(() => content !== savedContent, [content, savedContent])
@@ -297,9 +342,8 @@ export default function App(): JSX.Element {
     [dirty, openDroppedFile]
   )
 
-  const requestHistoryFile = useCallback(
+  const requestFileOpen = useCallback(
     (path: string) => {
-      setHistoryOpen(false)
       if (dirty) {
         pendingOpenRef.current = { kind: 'path', path }
         setPrompt('open')
@@ -309,6 +353,56 @@ export default function App(): JSX.Element {
       void openFileByPath(path)
     },
     [dirty, openFileByPath]
+  )
+
+  const requestHistoryFile = useCallback(
+    (path: string) => {
+      setHistoryOpen(false)
+      requestFileOpen(path)
+    },
+    [requestFileOpen]
+  )
+
+  const requestReadingFile = useCallback(
+    (path: string) => {
+      requestFileOpen(path)
+    },
+    [requestFileOpen]
+  )
+
+  const addReadingFiles = useCallback(async () => {
+    try {
+      const selectedFiles = await window.seerMarkdown.selectFiles()
+      if (selectedFiles.length === 0) {
+        return
+      }
+
+      setReadingList((current) => mergeReadingList(current, selectedFiles))
+      requestReadingFile(selectedFiles[0].path)
+    } catch (error) {
+      showNotice(getErrorMessage(error), 'error')
+    }
+  }, [requestReadingFile, showNotice])
+
+  const addDroppedReadingFiles = useCallback(
+    (droppedFiles: File[]) => {
+      try {
+        const selectedFiles = droppedFiles
+          .map((file) => window.seerMarkdown.getFileInfo(file))
+          .filter((file) => file.path)
+
+        if (selectedFiles.length === 0) {
+          showNotice('无法读取拖入的文件位置', 'error')
+          return
+        }
+
+        setReadingList((current) => mergeReadingList(current, selectedFiles))
+        showNotice(`已添加 ${selectedFiles.length} 个文件到阅读列表`, 'success')
+      } catch (error) {
+        showNotice(getErrorMessage(error), 'error')
+      }
+    },
+    [showNotice]
   )
 
   const requestSave = useCallback(() => {
@@ -368,6 +462,14 @@ export default function App(): JSX.Element {
       // History remains available for this session when storage is unavailable.
     }
   }, [history])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(readingListStorageKey, JSON.stringify(readingList))
+    } catch {
+      // Reading list remains available for this session when storage is unavailable.
+    }
+  }, [readingList])
 
   useEffect(() => {
     window.seerMarkdown.setDirty(dirty)
@@ -465,6 +567,53 @@ export default function App(): JSX.Element {
     }
   }
 
+  const handleReadingListDragEnter = (event: ReactDragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    readingListDragDepthRef.current += 1
+    setReadingListDragActive(true)
+  }
+
+  const handleReadingListDragOver = (event: ReactDragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleReadingListDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.stopPropagation()
+    readingListDragDepthRef.current = Math.max(0, readingListDragDepthRef.current - 1)
+    if (readingListDragDepthRef.current === 0) {
+      setReadingListDragActive(false)
+    }
+  }
+
+  const handleReadingListDrop = (event: ReactDragEvent<HTMLElement>) => {
+    if (!hasDraggedFiles(event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    readingListDragDepthRef.current = 0
+    setReadingListDragActive(false)
+
+    const droppedFiles = Array.from(event.dataTransfer.files)
+    if (droppedFiles.length === 0) {
+      showNotice('未检测到可添加的文件', 'error')
+      return
+    }
+    addDroppedReadingFiles(droppedFiles)
+  }
+
   const handleFileDrop = (event: ReactDragEvent<HTMLDivElement>) => {
     if (!hasDraggedFiles(event)) {
       return
@@ -487,6 +636,14 @@ export default function App(): JSX.Element {
   const showSource = !previewOnly
   const showPreview = previewEnabled || previewOnly
   const splitView = showSource && showPreview
+  const activeReadingIndex = file
+    ? readingList.findIndex((item) => item.path === file.path)
+    : -1
+  const previousReadingItem = activeReadingIndex > 0 ? readingList[activeReadingIndex - 1] : null
+  const nextReadingItem =
+    activeReadingIndex >= 0 && activeReadingIndex < readingList.length - 1
+      ? readingList[activeReadingIndex + 1]
+      : null
 
   return (
     <div
@@ -549,6 +706,13 @@ export default function App(): JSX.Element {
             </NeuIconButton>
             <NeuIconButton label="打开历史记录" title="打开历史记录" onClick={() => setHistoryOpen(true)}>
               <History aria-hidden="true" />
+            </NeuIconButton>
+            <NeuIconButton
+              label="打开阅读列表"
+              title="打开阅读列表"
+              onClick={() => setReadingListOpen(true)}
+            >
+              <ListVideo aria-hidden="true" />
             </NeuIconButton>
           </div>
         </section>
@@ -841,6 +1005,112 @@ export default function App(): JSX.Element {
           <Upload aria-hidden="true" />
           <strong>松开以打开文件</strong>
           <span>一次只能打开一个文件</span>
+        </div>
+      )}
+
+      {readingListOpen && (
+        <div className="modal-backdrop">
+          <NeuPanel
+            as="section"
+            surface="raised"
+            className={`history-dialog reading-list-dialog ${readingListDragActive ? 'is-dragging' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reading-list-title"
+            onDragEnter={handleReadingListDragEnter}
+            onDragOver={handleReadingListDragOver}
+            onDragLeave={handleReadingListDragLeave}
+            onDrop={handleReadingListDrop}
+          >
+            {readingListDragActive && (
+              <div className="reading-list-drop-overlay" role="status">
+                <Upload aria-hidden="true" />
+                <strong>松开以添加到阅读列表</strong>
+                <span>可一次拖入多个文件</span>
+              </div>
+            )}
+            <div className="history-heading">
+              <div>
+                <p className="eyebrow">READING LIST</p>
+                <h2 id="reading-list-title">阅读列表</h2>
+              </div>
+              <NeuIconButton
+                label="关闭阅读列表"
+                title="关闭阅读列表"
+                onClick={() => setReadingListOpen(false)}
+              >
+                <X aria-hidden="true" />
+              </NeuIconButton>
+            </div>
+
+            <div className="reading-list-toolbar">
+              <NeuButton variant="primary" size="sm" onClick={() => void addReadingFiles()}>
+                <Plus aria-hidden="true" />
+                添加文件
+              </NeuButton>
+              <div className="reading-list-navigation">
+                <NeuButton
+                  variant="secondary"
+                  size="sm"
+                  disabled={!previousReadingItem}
+                  onClick={() => {
+                    if (previousReadingItem) {
+                      requestReadingFile(previousReadingItem.path)
+                    }
+                  }}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                  上一个
+                </NeuButton>
+                <NeuButton
+                  variant="secondary"
+                  size="sm"
+                  disabled={!nextReadingItem}
+                  onClick={() => {
+                    if (nextReadingItem) {
+                      requestReadingFile(nextReadingItem.path)
+                    }
+                  }}
+                >
+                  下一个
+                  <ChevronRight aria-hidden="true" />
+                </NeuButton>
+              </div>
+            </div>
+
+            {readingList.length > 0 ? (
+              <ol className="history-list reading-list">
+                {readingList.map((entry, index) => {
+                  const active = entry.path === file?.path
+                  return (
+                    <li key={entry.path}>
+                      <button
+                        type="button"
+                        className={`history-item reading-list-item ${active ? 'is-active' : ''}`}
+                        aria-current={active ? 'page' : undefined}
+                        onClick={() => requestReadingFile(entry.path)}
+                      >
+                        <span className="reading-list-index">
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+                        <FileText aria-hidden="true" />
+                        <span className="history-item-copy">
+                          <strong>{entry.name}</strong>
+                          <span title={entry.path}>{entry.path}</span>
+                        </span>
+                        {active && <span className="reading-list-current">当前</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ol>
+            ) : (
+              <div className="history-empty">
+                <ListVideo aria-hidden="true" />
+                <p>暂无阅读文件</p>
+              </div>
+            )}
+          </NeuPanel>
         </div>
       )}
 

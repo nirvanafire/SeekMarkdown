@@ -41,6 +41,8 @@ vi.mock('../components/Preview', () => ({
 
 const api = {
   openFile: vi.fn(),
+  getFileInfo: vi.fn(),
+  selectFiles: vi.fn(),
   openDroppedFile: vi.fn(),
   openFileByPath: vi.fn(),
   saveFile: vi.fn(),
@@ -119,6 +121,121 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 历史文档')
     })
+  })
+
+  it('adds selected files to the persistent reading list and opens the first file', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.reading-list',
+      JSON.stringify([{ path: '/tmp/existing-2.md', name: 'existing-2.md' }])
+    )
+    api.selectFiles.mockResolvedValue([
+      { path: '/tmp/new-1.md', name: 'new-1.md' },
+      { path: '/tmp/existing-2.md', name: 'existing-2.md' },
+      { path: '/tmp/new-3.md', name: 'new-3.md' }
+    ])
+    api.openFileByPath.mockResolvedValue({
+      path: '/tmp/new-1.md',
+      name: 'new-1.md',
+      content: '# 第一篇'
+    })
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+    await userEvent.click(screen.getByRole('button', { name: '添加文件' }))
+
+    const readingDialog = screen.getByRole('dialog', { name: '阅读列表' })
+    const readingItems = within(readingDialog)
+      .getAllByRole('button')
+      .filter((button) => button.classList.contains('reading-list-item'))
+    expect(readingItems).toHaveLength(3)
+    expect(readingItems[0]).toHaveTextContent('existing-2.md')
+    expect(readingItems[1]).toHaveTextContent('new-1.md')
+    expect(readingItems[2]).toHaveTextContent('new-3.md')
+
+    await waitFor(() => {
+      expect(api.openFileByPath).toHaveBeenCalledWith('/tmp/new-1.md')
+      expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 第一篇')
+    })
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem('seermarkdown.reading-list') ?? '[]')
+      expect(stored).toHaveLength(3)
+    })
+  })
+
+  it('adds dropped files to the reading list without opening them', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+
+    const droppedFiles = [
+      new File(['# 第一篇'], 'dropped-1.md'),
+      new File(['# 第二篇'], 'dropped-2.md')
+    ]
+    api.getFileInfo.mockImplementation((file) => ({
+      path: `/tmp/${file.name}`,
+      name: file.name
+    }))
+    const dataTransfer = {
+      types: ['Files'],
+      files: {
+        0: droppedFiles[0],
+        1: droppedFiles[1],
+        length: 2,
+        item: (index: number) => droppedFiles[index] ?? null
+      },
+      dropEffect: 'none'
+    } as unknown as DataTransfer
+
+    const readingDialog = screen.getByRole('dialog', { name: '阅读列表' })
+    fireEvent.dragEnter(readingDialog, { dataTransfer })
+    expect(screen.getByText('松开以添加到阅读列表')).toBeInTheDocument()
+
+    fireEvent.drop(readingDialog, { dataTransfer })
+    expect(screen.getByRole('button', { name: /dropped-1\.md/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /dropped-2\.md/ })).toBeInTheDocument()
+    expect(api.openFileByPath).not.toHaveBeenCalled()
+    expect(api.openDroppedFile).not.toHaveBeenCalled()
+  })
+
+  it('navigates the reading list and protects dirty content when switching', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.reading-list',
+      JSON.stringify([
+        { path: '/tmp/one.md', name: 'one.md' },
+        { path: '/tmp/two.md', name: 'two.md' },
+        { path: '/tmp/three.md', name: 'three.md' }
+      ])
+    )
+    api.openFileByPath.mockImplementation(async (path: string) => ({
+      path,
+      name: path.split('/').at(-1) ?? path,
+      content: path
+    }))
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+    const previousButton = screen.getByRole('button', { name: '上一个' })
+    const nextButton = screen.getByRole('button', { name: '下一个' })
+    expect(previousButton).toBeDisabled()
+    expect(nextButton).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /one\.md/ }))
+    await waitFor(() => {
+      expect(api.openFileByPath).toHaveBeenCalledWith('/tmp/one.md')
+    })
+    expect(screen.getByRole('button', { name: /one\.md/ })).toHaveAttribute('aria-current', 'page')
+    expect(previousButton).toBeDisabled()
+    expect(nextButton).toBeEnabled()
+
+    await userEvent.click(nextButton)
+    await waitFor(() => {
+      expect(api.openFileByPath).toHaveBeenCalledWith('/tmp/two.md')
+    })
+
+    await userEvent.type(screen.getByLabelText('markdown-editor'), ' 未保存')
+    await userEvent.click(screen.getByRole('button', { name: '下一个' }))
+    expect(await screen.findByRole('dialog', { name: '保留这次修改吗？' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(api.openFileByPath).not.toHaveBeenCalledWith('/tmp/three.md')
   })
 
   it('switches between split preview and preview-only mode', async () => {

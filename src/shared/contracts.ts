@@ -1,6 +1,9 @@
-export interface OpenedFile {
+export interface FileInfo {
   path: string
   name: string
+}
+
+export interface OpenedFile extends FileInfo {
   content: string
 }
 
@@ -15,6 +18,8 @@ export type MenuCommand = 'open' | 'save' | 'save-as'
 
 export interface SeerMarkdownApi {
   openFile(): Promise<OpenedFile | null>
+  getFileInfo(file: File): FileInfo
+  selectFiles(): Promise<FileInfo[]>
   openDroppedFile(file: File): Promise<OpenedFile | null>
   openFileByPath(path: string): Promise<OpenedFile | null>
   saveFile(path: string, content: string): Promise<SaveResult>
