@@ -1,0 +1,25 @@
+appId: com.seer.markdown
+productName: SeerMarkdown
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+electronDist: node_modules/electron/dist
+icon: icon.png
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+mac:
+  icon: icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+win:
+  icon: icon.png
+  target:
+    - nsis
+linux:
+  category: Office
+  target:
+    - AppImage
