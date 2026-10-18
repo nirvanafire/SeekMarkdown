@@ -13,6 +13,7 @@ const api: SeerMarkdownApi = {
     const path = webUtils.getPathForFile(file)
     return path ? ipcRenderer.invoke('file:open-path', path) : Promise.resolve(null)
   },
+  openFileByPath: (path) => ipcRenderer.invoke('file:open-path', path),
   saveFile: (path, content) => ipcRenderer.invoke('file:save', { path, content }),
   saveFileAs: (content, suggestedName) =>
     ipcRenderer.invoke('file:save-as', { content, suggestedName }),

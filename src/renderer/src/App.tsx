@@ -8,6 +8,7 @@ import {
   FileDown,
   FileText,
   FolderOpen,
+  History,
   Italic,
   Link2,
   List,
@@ -57,6 +58,54 @@ interface Notice {
   tone: NoticeTone
 }
 
+interface FileHistoryEntry {
+  path: string
+  name: string
+  openedAt: number
+}
+
+type PendingOpen =
+  | { kind: 'dialog' }
+  | { kind: 'path'; path: string }
+  | { kind: 'drop'; file: File }
+
+const historyStorageKey = 'seermarkdown.file-history'
+const historyLimit = 50
+
+function readHistory(): FileHistoryEntry[] {
+  try {
+    const raw = window.localStorage.getItem(historyStorageKey)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed
+      .filter((item): item is FileHistoryEntry => {
+        return (
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as FileHistoryEntry).path === 'string' &&
+          typeof (item as FileHistoryEntry).name === 'string' &&
+          typeof (item as FileHistoryEntry).openedAt === 'number'
+        )
+      })
+      .sort((a, b) => b.openedAt - a.openedAt)
+      .slice(0, historyLimit)
+  } catch {
+    return []
+  }
+}
+
+function formatHistoryTime(openedAt: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(openedAt))
+}
+
 function countVisibleCharacters(value: string): number {
   return Array.from(value.replace(/\s/g, '')).length
 }
@@ -78,15 +127,29 @@ export default function App(): JSX.Element {
   const [previewOnly, setPreviewOnly] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
+  const [history, setHistory] = useState<FileHistoryEntry[]>(readHistory)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const workspaceRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<CodeEditorHandle | null>(null)
   const draggingSplitRef = useRef(false)
-  const pendingDroppedFileRef = useRef<File | null>(null)
+  const pendingOpenRef = useRef<PendingOpen | null>(null)
   const dragDepthRef = useRef(0)
   const noticeTimerRef = useRef<number | null>(null)
 
   const dirty = useMemo(() => content !== savedContent, [content, savedContent])
   const characterCount = useMemo(() => countVisibleCharacters(content), [content])
+
+  const rememberFile = useCallback((nextFile: OpenedFile) => {
+    const entry: FileHistoryEntry = {
+      path: nextFile.path,
+      name: nextFile.name,
+      openedAt: Date.now()
+    }
+    setHistory((current) => [
+      entry,
+      ...current.filter((item) => item.path !== entry.path)
+    ].slice(0, historyLimit))
+  }, [])
 
   const showNotice = useCallback((text: string, tone: NoticeTone = 'neutral') => {
     if (noticeTimerRef.current !== null) {
@@ -101,13 +164,14 @@ export default function App(): JSX.Element {
   }, [])
 
   const loadFile = useCallback((nextFile: OpenedFile) => {
-    pendingDroppedFileRef.current = null
+    pendingOpenRef.current = null
+    rememberFile(nextFile)
     setFile(nextFile)
     setContent(nextFile.content)
     setSavedContent(nextFile.content)
     setPrompt(null)
     showNotice(`已打开 ${nextFile.name}`)
-  }, [showNotice])
+  }, [rememberFile, showNotice])
 
   const performOpen = useCallback(async () => {
     try {
@@ -134,6 +198,33 @@ export default function App(): JSX.Element {
     [loadFile, showNotice]
   )
 
+  const openFileByPath = useCallback(
+    async (path: string) => {
+      try {
+        const nextFile = await window.seerMarkdown.openFileByPath(path)
+        if (nextFile) {
+          loadFile(nextFile)
+        }
+      } catch (error) {
+        showNotice(getErrorMessage(error), 'error')
+      }
+    },
+    [loadFile, showNotice]
+  )
+
+  const continuePendingOpen = useCallback(async () => {
+    const pending = pendingOpenRef.current
+    pendingOpenRef.current = null
+
+    if (pending?.kind === 'drop') {
+      await openDroppedFile(pending.file)
+    } else if (pending?.kind === 'path') {
+      await openFileByPath(pending.path)
+    } else {
+      await performOpen()
+    }
+  }, [openDroppedFile, openFileByPath, performOpen])
+
   const saveFileAs = useCallback(async (): Promise<boolean> => {
     const contentToSave = content
     setSavePhase('saving')
@@ -149,6 +240,7 @@ export default function App(): JSX.Element {
       }
 
       setFile(savedFile)
+      rememberFile(savedFile)
       setSavedContent(contentToSave)
       setSavePhase('idle')
       showNotice(`已保存到 ${savedFile.name}`, 'success')
@@ -158,7 +250,7 @@ export default function App(): JSX.Element {
       showNotice(getErrorMessage(error), 'error')
       return false
     }
-  }, [content, file?.name, showNotice])
+  }, [content, file?.name, rememberFile, showNotice])
 
   const persistCurrent = useCallback(async (): Promise<boolean> => {
     if (!file) {
@@ -183,24 +275,40 @@ export default function App(): JSX.Element {
   }, [content, file, saveFileAs, showNotice])
 
   const requestOpen = useCallback(() => {
-    pendingDroppedFileRef.current = null
+    pendingOpenRef.current = { kind: 'dialog' }
     if (dirty) {
       setPrompt('open')
       return
     }
+    pendingOpenRef.current = null
     void performOpen()
   }, [dirty, performOpen])
 
   const requestDroppedFile = useCallback(
     (droppedFile: File) => {
       if (dirty) {
-        pendingDroppedFileRef.current = droppedFile
+        pendingOpenRef.current = { kind: 'drop', file: droppedFile }
         setPrompt('open')
         return
       }
+      pendingOpenRef.current = null
       void openDroppedFile(droppedFile)
     },
     [dirty, openDroppedFile]
+  )
+
+  const requestHistoryFile = useCallback(
+    (path: string) => {
+      setHistoryOpen(false)
+      if (dirty) {
+        pendingOpenRef.current = { kind: 'path', path }
+        setPrompt('open')
+        return
+      }
+      pendingOpenRef.current = null
+      void openFileByPath(path)
+    },
+    [dirty, openFileByPath]
   )
 
   const requestSave = useCallback(() => {
@@ -215,7 +323,7 @@ export default function App(): JSX.Element {
     async (choice: PromptChoice) => {
       const activePrompt = prompt
       if (!activePrompt || choice === 'cancel') {
-        pendingDroppedFileRef.current = null
+        pendingOpenRef.current = null
         setPrompt(null)
         if (activePrompt === 'close') {
           window.seerMarkdown.completeClose('cancelled')
@@ -223,38 +331,43 @@ export default function App(): JSX.Element {
         return
       }
 
-      const droppedFile = pendingDroppedFileRef.current
-      pendingDroppedFileRef.current = null
+      const pending = pendingOpenRef.current
 
       if (choice === 'save') {
         const saved = await persistCurrent()
         if (!saved) {
-          pendingDroppedFileRef.current = droppedFile
+          pendingOpenRef.current = pending
           return
         }
 
         setPrompt(null)
         if (activePrompt === 'close') {
+          pendingOpenRef.current = null
           window.seerMarkdown.completeClose('saved')
-        } else if (droppedFile) {
-          await openDroppedFile(droppedFile)
         } else {
-          await performOpen()
+          await continuePendingOpen()
         }
         return
       }
 
       setPrompt(null)
       if (activePrompt === 'close') {
+        pendingOpenRef.current = null
         window.seerMarkdown.completeClose('discard')
-      } else if (droppedFile) {
-        await openDroppedFile(droppedFile)
       } else {
-        await performOpen()
+        await continuePendingOpen()
       }
     },
-    [openDroppedFile, performOpen, prompt, persistCurrent]
+    [continuePendingOpen, prompt, persistCurrent]
   )
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(historyStorageKey, JSON.stringify(history))
+    } catch {
+      // History remains available for this session when storage is unavailable.
+    }
+  }, [history])
 
   useEffect(() => {
     window.seerMarkdown.setDirty(dirty)
@@ -395,7 +508,7 @@ export default function App(): JSX.Element {
           <span className="brand-mark">S/M</span>
           {!sidebarCollapsed && (
             <span className="brand-name">
-              Seer<span>Markdown</span>
+              Seer<span>Md</span>
             </span>
           )}
           <NeuIconButton
@@ -433,6 +546,9 @@ export default function App(): JSX.Element {
             </NeuIconButton>
             <NeuIconButton label="另存为" title="另存为" onClick={requestSaveAs}>
               <FileDown aria-hidden="true" />
+            </NeuIconButton>
+            <NeuIconButton label="打开历史记录" title="打开历史记录" onClick={() => setHistoryOpen(true)}>
+              <History aria-hidden="true" />
             </NeuIconButton>
           </div>
         </section>
@@ -725,6 +841,56 @@ export default function App(): JSX.Element {
           <Upload aria-hidden="true" />
           <strong>松开以打开文件</strong>
           <span>一次只能打开一个文件</span>
+        </div>
+      )}
+
+      {historyOpen && (
+        <div className="modal-backdrop">
+          <NeuPanel
+            as="section"
+            surface="raised"
+            className="history-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-title"
+          >
+            <div className="history-heading">
+              <div>
+                <p className="eyebrow">FILE HISTORY</p>
+                <h2 id="history-title">打开历史</h2>
+              </div>
+              <NeuIconButton label="关闭历史记录" title="关闭历史记录" onClick={() => setHistoryOpen(false)}>
+                <X aria-hidden="true" />
+              </NeuIconButton>
+            </div>
+            {history.length > 0 ? (
+              <ol className="history-list">
+                {history.map((entry) => (
+                  <li key={entry.path}>
+                    <button
+                      type="button"
+                      className="history-item"
+                      onClick={() => requestHistoryFile(entry.path)}
+                    >
+                      <FileText aria-hidden="true" />
+                      <span className="history-item-copy">
+                        <strong>{entry.name}</strong>
+                        <span title={entry.path}>{entry.path}</span>
+                      </span>
+                      <time dateTime={new Date(entry.openedAt).toISOString()}>
+                        {formatHistoryTime(entry.openedAt)}
+                      </time>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="history-empty">
+                <History aria-hidden="true" />
+                <p>暂无打开记录</p>
+              </div>
+            )}
+          </NeuPanel>
         </div>
       )}
 

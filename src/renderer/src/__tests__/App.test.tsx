@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuCommand, OpenedFile, SeerMarkdownApi } from '../../../shared/contracts'
@@ -42,6 +42,7 @@ vi.mock('../components/Preview', () => ({
 const api = {
   openFile: vi.fn(),
   openDroppedFile: vi.fn(),
+  openFileByPath: vi.fn(),
   saveFile: vi.fn(),
   saveFileAs: vi.fn(),
   setDirty: vi.fn(),
@@ -55,6 +56,7 @@ const api = {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     Object.defineProperty(window, 'seerMarkdown', {
       value: api,
       configurable: true
@@ -81,6 +83,38 @@ describe('App', () => {
       expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 打开的文档')
     })
     expect(screen.getByText('notes.md')).toBeInTheDocument()
+  })
+
+  it('shows file history in reverse chronological order and opens an entry', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.file-history',
+      JSON.stringify([
+        { path: '/tmp/old.md', name: 'old.md', openedAt: 1000 },
+        { path: '/tmp/new.md', name: 'new.md', openedAt: 2000 }
+      ])
+    )
+    api.openFileByPath.mockResolvedValue({
+      path: '/tmp/new.md',
+      name: 'new.md',
+      content: '# 历史文档'
+    })
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开历史记录' }))
+    const historyDialog = screen.getByRole('dialog', { name: '打开历史' })
+    const historyItems = within(historyDialog).getAllByRole('button').filter((button) => {
+      return button.getAttribute('class') === 'history-item'
+    })
+    expect(historyItems[0]).toHaveTextContent('new.md')
+    expect(historyItems[1]).toHaveTextContent('old.md')
+
+    await userEvent.click(historyItems[0])
+    await waitFor(() => {
+      expect(api.openFileByPath).toHaveBeenCalledWith('/tmp/new.md')
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 历史文档')
+    })
   })
 
   it('switches between split preview and preview-only mode', async () => {

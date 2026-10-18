@@ -72,6 +72,11 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   await expect(page.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.sidebar')).toBeVisible()
 
+  await page.getByRole('button', { name: '打开历史记录' }).click()
+  await expect(page.getByRole('dialog', { name: '打开历史' })).toContainText('shortcuts.md')
+  await page.getByRole('button', { name: /shortcuts\.md/ }).click()
+  await expect(page.locator('.document-copy strong')).toHaveText('shortcuts.md')
+
   await page.getByRole('switch', { name: '实时预览' }).click()
 
   await page.locator('.cm-content').click()
