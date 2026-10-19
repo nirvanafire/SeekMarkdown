@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuCommand, OpenedFile, SeerMarkdownApi } from '../../../shared/contracts'
@@ -10,7 +10,16 @@ vi.mock('../components/CodeEditor', async () => {
 
   return {
     default: forwardRef<
-      { execute(action: string): void; focus(): void },
+      {
+        execute(action: string): void
+        focus(): void
+        getPosition(): { cursor: number; scrollRatio: number }
+        setPosition(position: { cursor: number; scrollRatio: number } | null): void
+        setSelection(from: number, to?: number): void
+        replaceRange(from: number, to: number, text: string, selectStart?: number, selectEnd?: number): void
+        replaceAll(replacements: { from: number; to: number; text: string }[]): void
+        insertText(text: string): void
+      },
       { value: string; onChange: (value: string) => void }
     >(function MockCodeEditor({ value, onChange }, ref) {
       useImperativeHandle(
@@ -19,17 +28,43 @@ vi.mock('../components/CodeEditor', async () => {
           execute(action) {
             onChange(`${value}\n<!--${action}-->`)
           },
-          focus() {}
+          focus() {},
+          getPosition() {
+            return { cursor: value.length, scrollRatio: 0.25 }
+          },
+          setSelection(from, to) {
+            document.querySelector('[data-testid="editor-position"]')?.setAttribute('data-position', `${from}:${to ?? from}`)
+          },
+          replaceRange(from, to, text) {
+            onChange(`${value.slice(0, from)}${text}${value.slice(to)}`)
+          },
+          replaceAll(replacements) {
+            const next = [...replacements]
+              .sort((a, b) => b.from - a.from)
+              .reduce((current, item) => `${current.slice(0, item.from)}${item.text}${current.slice(item.to)}`, value)
+            onChange(next)
+          },
+          insertText(text) {
+            onChange(`${value}${text}`)
+          },
+          setPosition(position) {
+            document
+              .querySelector('[data-testid="editor-position"]')
+              ?.setAttribute('data-position', JSON.stringify(position))
+          }
         }),
         [onChange, value]
       )
 
       return (
-        <textarea
-          aria-label="markdown-editor"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
+        <>
+          <textarea
+            aria-label="markdown-editor"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <span data-testid="editor-position" />
+        </>
       )
     })
   }
@@ -47,6 +82,8 @@ const api = {
   openFileByPath: vi.fn(),
   saveFile: vi.fn(),
   saveFileAs: vi.fn(),
+  selectImage: vi.fn(),
+  readLocalImage: vi.fn(),
   setDirty: vi.fn(),
   requestClose: vi.fn(),
   completeClose: vi.fn(),
@@ -84,7 +121,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('markdown-editor')).toHaveValue('# 打开的文档')
     })
-    expect(screen.getByText('notes.md')).toBeInTheDocument()
+    expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0)
   })
 
   it('shows file history in reverse chronological order and opens an entry', async () => {
@@ -162,6 +199,27 @@ describe('App', () => {
     })
   })
 
+  it('clears the persistent reading list', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.reading-list',
+      JSON.stringify([
+        { path: '/tmp/one.md', name: 'one.md' },
+        { path: '/tmp/two.md', name: 'two.md' }
+      ])
+    )
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+    expect(screen.getByRole('button', { name: /one\.md/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '清空列表' }))
+    expect(screen.getByText('暂无阅读文件')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '清空列表' })).toBeDisabled()
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem('seermarkdown.reading-list') ?? '[]')).toEqual([])
+    })
+  })
+
   it('adds dropped files to the reading list without opening them', async () => {
     render(<App />)
     await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
@@ -194,6 +252,104 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /dropped-2\.md/ })).toBeInTheDocument()
     expect(api.openFileByPath).not.toHaveBeenCalled()
     expect(api.openDroppedFile).not.toHaveBeenCalled()
+  })
+
+  it('scrolls the reading list to the current file when opened', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.reading-list',
+      JSON.stringify([
+        { path: '/tmp/one.md', name: 'one.md' },
+        { path: '/tmp/two.md', name: 'two.md' }
+      ])
+    )
+    api.openFileByPath.mockResolvedValue({
+      path: '/tmp/one.md',
+      name: 'one.md',
+      content: '# one'
+    })
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+    await userEvent.click(screen.getByRole('button', { name: /one\.md/ }))
+    await waitFor(() => {
+      expect(vi.mocked(Element.prototype.scrollIntoView)).toHaveBeenCalledWith({
+        block: 'nearest'
+      })
+    })
+    expect(screen.getByRole('button', { name: /one\.md/ })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('saves the previous file position and restores positions from list entries', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.file-history',
+      JSON.stringify([
+        { path: '/tmp/one.md', name: 'one.md', openedAt: 1000 },
+        { path: '/tmp/two.md', name: 'two.md', openedAt: 2000 }
+      ])
+    )
+    window.localStorage.setItem(
+      'seermarkdown.reading-list',
+      JSON.stringify([
+        { path: '/tmp/one.md', name: 'one.md' },
+        { path: '/tmp/two.md', name: 'two.md' }
+      ])
+    )
+    window.localStorage.setItem(
+      'seermarkdown.file-positions',
+      JSON.stringify({
+        '/tmp/two.md': {
+          editor: { cursor: 99, scrollRatio: 0.8 },
+          preview: { scrollRatio: 0.65 }
+        }
+      })
+    )
+    api.openFileByPath.mockImplementation(async (path: string) => ({
+      path,
+      name: path.split('/').at(-1) ?? path,
+      content: path.endsWith('two.md') ? 'second' : 'first'
+    }))
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开历史记录' }))
+    await userEvent.click(screen.getByRole('button', { name: /two\.md/ }))
+    await waitFor(() => {
+      expect(screen.getByTestId('editor-position')).toHaveAttribute(
+        'data-position',
+        JSON.stringify({ cursor: 6, scrollRatio: 0.8 })
+      )
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: '打开阅读列表' }))
+    await userEvent.click(screen.getByRole('button', { name: /one\.md/ }))
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem('seermarkdown.file-positions') ?? '{}')
+      expect(stored['/tmp/two.md'].editor).toEqual({ cursor: 6, scrollRatio: 0.25 })
+      expect(stored['/tmp/two.md'].preview.scrollRatio).toBe(0)
+    })
+  })
+
+  it('does not restore cached positions when opening from the normal file dialog', async () => {
+    window.localStorage.setItem(
+      'seermarkdown.file-positions',
+      JSON.stringify({
+        '/tmp/plain.md': {
+          editor: { cursor: 8, scrollRatio: 0.5 },
+          preview: { scrollRatio: 0.4 }
+        }
+      })
+    )
+    api.openFile.mockResolvedValue({
+      path: '/tmp/plain.md',
+      name: 'plain.md',
+      content: 'plain'
+    })
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
+    await waitFor(() => {
+      expect(screen.getByLabelText('markdown-editor')).toHaveValue('plain')
+    })
+    expect(screen.getByTestId('editor-position')).not.toHaveAttribute('data-position')
   })
 
   it('navigates the reading list and protects dirty content when switching', async () => {
@@ -373,5 +529,86 @@ describe('App', () => {
     await waitFor(() => {
       expect(api.saveFileAs).toHaveBeenCalled()
     })
+  })
+})
+
+describe('App writing and reading tools', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    window.localStorage.clear()
+    Object.defineProperty(window, 'seerMarkdown', {
+      value: api,
+      configurable: true
+    })
+    api.onInitialFile.mockReturnValue(() => undefined)
+    api.onMenuCommand.mockReturnValue(() => undefined)
+    api.onCloseRequested.mockReturnValue(() => undefined)
+  })
+
+  it('finds and replaces text with result count', async () => {
+    render(<App />)
+    const editor = screen.getByLabelText('markdown-editor')
+    fireEvent.change(editor, { target: { value: '# title\n\ntitle again' } })
+
+    await userEvent.click(screen.getByRole('button', { name: '查找和替换' }))
+    await userEvent.type(screen.getByLabelText('查找内容'), 'title')
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('替换为'), { target: { value: 'chapter' } })
+    await userEvent.click(screen.getByRole('button', { name: '全部替换' }))
+    expect(screen.getByLabelText('markdown-editor')).toHaveValue('# chapter\n\nchapter again')
+  })
+
+  it('shows the outline and jumps to a heading', async () => {
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('markdown-editor'), {
+      target: { value: '# Overview\n\n## Details' }
+    })
+    await userEvent.click(screen.getByRole('button', { name: '文档大纲' }))
+    expect(screen.getByRole('dialog', { name: '文档大纲' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Details/ }))
+    expect(screen.queryByRole('dialog', { name: '文档大纲' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('editor-position')).toHaveAttribute('data-position')
+  })
+
+  it('auto-saves an existing document after the debounce', async () => {
+    vi.useFakeTimers()
+    api.openFile.mockResolvedValue({ path: '/tmp/auto.md', name: 'auto.md', content: '# old' })
+    api.saveFile.mockResolvedValue({ path: '/tmp/auto.md', name: 'auto.md' })
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.change(screen.getByLabelText('markdown-editor'), { target: { value: '# new' } })
+    await act(async () => {
+      vi.advanceTimersByTime(1600)
+      await Promise.resolve()
+    })
+    expect(api.saveFile).toHaveBeenCalledWith('/tmp/auto.md', '# new')
+    vi.useRealTimers()
+  })
+
+  it('inserts a copied local image path', async () => {
+    api.openFile.mockResolvedValue({ path: '/tmp/notes.md', name: 'notes.md', content: '' })
+    api.selectImage.mockResolvedValue({ markdownPath: 'assets/picture.png', name: 'picture.png' })
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
+    fireEvent.click(screen.getByRole('button', { name: '插入本地图片' }))
+    expect(await screen.findByLabelText('markdown-editor')).toHaveValue(
+      '![picture.png](assets/picture.png)'
+    )
+  })
+
+  it('adds and deletes persistent bookmarks and annotations', async () => {
+    api.openFile.mockResolvedValue({ path: '/tmp/notes.md', name: 'notes.md', content: '# note' })
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
+    await userEvent.click(screen.getByRole('button', { name: '书签和批注' }))
+    await userEvent.click(screen.getByRole('button', { name: '添加书签' }))
+    expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0)
+
+    await userEvent.click(screen.getByRole('button', { name: /删除书签/ }))
+    expect(screen.getByText('当前文档暂无书签')).toBeInTheDocument()
   })
 })

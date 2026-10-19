@@ -19,6 +19,7 @@ test('launches, edits, saves, and protects unsaved Markdown', async () => {
   await expect(page.locator('.editor-panel')).toBeVisible()
   await expect(page.locator('.preview-panel')).toHaveCount(0)
 
+  await page.getByRole('switch', { name: '自动保存' }).click()
   await page.getByRole('switch', { name: '实时预览' }).click()
   await expect(page.locator('.markdown-preview h1')).toHaveText('初始文档')
 

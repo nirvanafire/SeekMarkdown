@@ -7,6 +7,11 @@ export interface OpenedFile extends FileInfo {
   content: string
 }
 
+export interface InsertedImage {
+  markdownPath: string
+  name: string
+}
+
 export interface SaveResult {
   path: string
   name: string
@@ -24,6 +29,8 @@ export interface SeerMarkdownApi {
   openFileByPath(path: string): Promise<OpenedFile | null>
   saveFile(path: string, content: string): Promise<SaveResult>
   saveFileAs(content: string, suggestedName: string): Promise<OpenedFile | null>
+  selectImage(documentPath: string): Promise<InsertedImage | null>
+  readLocalImage(documentPath: string, relativePath: string): Promise<string | null>
   setDirty(dirty: boolean): void
   requestClose(): Promise<void>
   completeClose(decision: CloseDecision): void

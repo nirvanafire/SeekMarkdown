@@ -1171,6 +1171,12 @@ button:focus-visible,
   margin-bottom: 15px;
 }
 
+.reading-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .reading-list-navigation {
   display: flex;
   gap: 8px;
@@ -1223,6 +1229,344 @@ button:focus-visible,
   to {
     opacity: 1;
   }
+}
+
+
+.reading-instrument {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  color: var(--neu-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+}
+
+.reading-instrument span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.reading-instrument span:nth-child(3) {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reading-instrument svg {
+  width: 12px;
+  height: 12px;
+}
+
+.reading-instrument > i {
+  display: block;
+  width: 76px;
+  height: 5px;
+  overflow: hidden;
+  background: var(--neu-base-dark);
+  border-radius: 999px;
+  box-shadow: var(--neu-inset);
+}
+
+.reading-instrument > i > b {
+  display: block;
+  height: 100%;
+  background: var(--neu-sage);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.search-console {
+  position: fixed;
+  z-index: 25;
+  top: 54px;
+  right: 26px;
+  width: min(390px, calc(100vw - 48px));
+  padding: 18px;
+  background: var(--neu-surface);
+  box-shadow: var(--neu-raised-strong);
+}
+
+.search-console-heading,
+.history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.search-console-heading {
+  margin-bottom: 14px;
+}
+
+.search-console-heading .eyebrow {
+  margin-bottom: 5px;
+}
+
+.search-console-heading strong {
+  color: var(--neu-ink);
+  font-family: 'Bricolage Grotesque Variable', 'PingFang SC', sans-serif;
+  font-size: 20px;
+}
+
+.search-field {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 0;
+  padding: 9px 11px;
+  color: var(--neu-muted);
+  background: var(--neu-base);
+  border: 1px solid var(--neu-border);
+  border-radius: 7px;
+  box-shadow: var(--neu-inset);
+}
+
+.search-field svg {
+  width: 16px;
+  height: 16px;
+}
+
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  color: var(--neu-ink);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+}
+
+.search-field span {
+  color: var(--neu-accent-dark);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.search-options,
+.search-replace-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.search-options .neu-button {
+  min-width: 34px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.search-spacer {
+  flex: 1;
+}
+
+.search-replace-actions {
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--neu-border);
+}
+
+.outline-dialog {
+  width: min(560px, 100%);
+}
+
+.outline-list {
+  display: grid;
+  gap: 7px;
+  overflow: auto;
+  max-height: 520px;
+  padding: 2px;
+}
+
+.outline-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  color: var(--neu-muted);
+  text-align: left;
+  background: var(--neu-base);
+  border: 1px solid var(--neu-border);
+  border-radius: 7px;
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+}
+
+.outline-item:hover {
+  color: var(--neu-ink);
+  background: var(--neu-base-light);
+}
+
+.outline-item > span,
+.outline-item > small {
+  color: var(--neu-accent-dark);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.outline-item strong {
+  overflow: hidden;
+  color: var(--neu-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-level-2 { padding-left: 23px; }
+.outline-level-3 { padding-left: 36px; }
+.outline-level-4 { padding-left: 49px; }
+.outline-level-5 { padding-left: 62px; }
+.outline-level-6 { padding-left: 75px; }
+
+.review-dialog {
+  width: min(780px, 100%);
+}
+
+.review-actions {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 17px;
+}
+
+.annotation-draft {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 18px;
+  padding: 13px;
+  background: var(--neu-base);
+  border: 1px solid var(--neu-border);
+  border-radius: 7px;
+  box-shadow: var(--neu-inset);
+}
+
+.annotation-draft p {
+  margin: 0;
+  color: var(--neu-accent-dark);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.annotation-draft textarea {
+  min-height: 74px;
+  resize: vertical;
+  padding: 9px;
+  color: var(--neu-ink);
+  background: var(--neu-surface);
+  border: 1px solid var(--neu-border);
+  border-radius: 6px;
+  outline: 0;
+  font: inherit;
+}
+
+.review-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  overflow: auto;
+}
+
+.review-columns h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  color: var(--neu-ink);
+  font-size: 13px;
+}
+
+.review-columns h3 svg {
+  width: 15px;
+  color: var(--neu-accent);
+}
+
+.mark-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mark-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+}
+
+.mark-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+  background: var(--neu-base);
+  border: 1px solid var(--neu-border);
+  border-radius: 7px;
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+}
+
+.mark-item:hover {
+  background: var(--neu-base-light);
+}
+
+.mark-item strong,
+.mark-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mark-item strong {
+  color: var(--neu-ink);
+  font-size: 12px;
+}
+
+.mark-item span,
+.mark-empty {
+  color: var(--neu-muted);
+  font-size: 11px;
+}
+
+.mark-empty {
+  margin: 0;
+}
+
+.mark-list .neu-icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.mark-list .neu-icon-button svg {
+  width: 14px;
+}
+
+.markdown-preview mark.search-hit,
+.markdown-preview mark.annotation-mark {
+  padding: 1px 2px;
+  color: inherit;
+  background: rgba(239, 197, 115, 0.42);
+  border-radius: 3px;
+}
+
+.markdown-preview mark.search-hit.is-active {
+  background: rgba(184, 68, 50, 0.28);
+  outline: 2px solid rgba(184, 68, 50, 0.35);
+}
+
+.markdown-preview mark.annotation-mark {
+  background: rgba(130, 178, 151, 0.36);
+  box-shadow: inset 0 -2px rgba(80, 130, 103, 0.36);
 }
 
 @media (max-width: 1040px) {

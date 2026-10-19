@@ -3,6 +3,7 @@ import type {
   CloseDecision,
   MenuCommand,
   FileInfo,
+  InsertedImage,
   OpenedFile,
   SaveResult,
   SeerMarkdownApi
@@ -23,6 +24,10 @@ const api: SeerMarkdownApi = {
   saveFile: (path, content) => ipcRenderer.invoke('file:save', { path, content }),
   saveFileAs: (content, suggestedName) =>
     ipcRenderer.invoke('file:save-as', { content, suggestedName }),
+  selectImage: (documentPath): Promise<InsertedImage | null> =>
+    ipcRenderer.invoke('image:select', documentPath),
+  readLocalImage: (documentPath, relativePath): Promise<string | null> =>
+    ipcRenderer.invoke('image:read-local', documentPath, relativePath),
   setDirty: (dirty) => ipcRenderer.send('document:set-dirty', dirty),
   requestClose: () => ipcRenderer.invoke('window:request-close'),
   completeClose: (decision: CloseDecision) => ipcRenderer.send('window:close-resolved', decision),

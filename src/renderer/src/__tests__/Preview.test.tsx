@@ -1,8 +1,12 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Preview from '../components/Preview'
 
 describe('Preview', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('renders common Markdown and GFM structures', () => {
     const content = [
       '# 项目说明',
@@ -58,3 +62,40 @@ describe('Preview', () => {
     expect(screen.getByText(/图片不可用/)).toBeInTheDocument()
   })
 })
+
+
+  it('loads local images only through the restricted document bridge', async () => {
+    const readLocalImage = vi.fn().mockResolvedValue('data:image/png;base64,dGVzdA==')
+    Object.defineProperty(window, 'seerMarkdown', {
+      value: { readLocalImage },
+      configurable: true
+    })
+
+    const { container } = render(
+      <Preview
+        content="![本地图片](assets/picture.png)"
+        documentPath="/tmp/document.md"
+      />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,dGVzdA==')
+    })
+    expect(readLocalImage).toHaveBeenCalledWith('/tmp/document.md', 'assets/picture.png')
+  })
+
+  it('highlights search results and saved annotations', () => {
+    const { container } = render(
+      <Preview
+        content="needle and needle"
+        searchTerm="needle"
+        searchOptions={{ caseSensitive: false, wholeWord: false, regex: false }}
+        activeSearchIndex={0}
+        annotations={[{ id: 'annotation-1', quote: 'needle', note: 'note' }]}
+      />
+    )
+
+    expect(container.querySelectorAll('mark.search-hit')).toHaveLength(2)
+    expect(container.querySelector('mark.search-hit')).toHaveClass('is-active')
+    expect(container.querySelector('mark.annotation-mark')).toBeInTheDocument()
+  })

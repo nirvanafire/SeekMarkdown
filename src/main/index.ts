@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   app,
@@ -14,6 +14,7 @@ import {
 import type {
   CloseDecision,
   FileInfo,
+  InsertedImage,
   MenuCommand,
   OpenedFile,
   SaveResult
@@ -64,6 +65,13 @@ async function readOpenedFile(path: string): Promise<OpenedFile> {
   const content = await fs.readFile(path, 'utf8')
   return { path, name: basename(path), content }
 }
+
+const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'])
+
+const imageDialogFilters = [
+  { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] },
+  { name: '所有文件', extensions: ['*'] }
+]
 
 const markdownDialogFilters = [
   { name: 'Markdown', extensions: ['md', 'markdown', 'mdown'] },
@@ -123,6 +131,67 @@ async function saveMarkdownFileAs(
   const targetPath = withMarkdownExtension(result.filePath)
   await fs.writeFile(targetPath, content, 'utf8')
   return { path: targetPath, name: basename(targetPath), content }
+}
+
+function isPathInside(parent: string, child: string): boolean {
+  const normalizedParent = resolve(parent)
+  const normalizedChild = resolve(child)
+  return normalizedChild === normalizedParent || normalizedChild.startsWith(`${normalizedParent}${sep}`)
+}
+
+function imageMimeType(path: string): string {
+  switch (extname(path).toLowerCase()) {
+    case '.png':
+      return 'image/png'
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    case '.svg':
+      return 'image/svg+xml'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+async function insertLocalImage(
+  window: BrowserWindow,
+  documentPath: string
+): Promise<InsertedImage | null> {
+  if (!isAbsolute(documentPath)) {
+    throw new Error('请先保存 Markdown 文件后再插入图片')
+  }
+
+  const result = await dialog.showOpenDialog(window, {
+    title: '选择要插入的图片',
+    properties: ['openFile'],
+    filters: imageDialogFilters
+  })
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  const sourcePath = result.filePaths[0]
+  const assetsDirectory = join(dirname(documentPath), 'assets')
+  await fs.mkdir(assetsDirectory, { recursive: true })
+
+  const originalName = basename(sourcePath)
+  const extension = extname(originalName)
+  const stem = originalName.slice(0, originalName.length - extension.length)
+  let targetName = originalName
+  let targetPath = join(assetsDirectory, targetName)
+  let suffix = 1
+  while (await fs.access(targetPath).then(() => true).catch(() => false)) {
+    targetName = `${stem}-${suffix}${extension}`
+    targetPath = join(assetsDirectory, targetName)
+    suffix += 1
+  }
+
+  await fs.copyFile(sourcePath, targetPath)
+  return { markdownPath: `assets/${targetName}`, name: targetName }
 }
 
 function isExternalWebUrl(value: string): boolean {
@@ -284,6 +353,43 @@ function registerIpcHandlers(): void {
     await fs.writeFile(payload.path, payload.content, 'utf8')
     return { path: payload.path, name: basename(payload.path) }
   })
+
+  ipcMain.handle('image:select', async (event, documentPath: unknown): Promise<InsertedImage | null> => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || typeof documentPath !== 'string') {
+      return null
+    }
+    return insertLocalImage(window, documentPath)
+  })
+
+  ipcMain.handle(
+    'image:read-local',
+    async (_event, documentPath: unknown, relativePath: unknown): Promise<string | null> => {
+      if (
+        typeof documentPath !== 'string' ||
+        typeof relativePath !== 'string' ||
+        !isAbsolute(documentPath) ||
+        !imageExtensions.has(extname(relativePath).toLowerCase()) ||
+        relativePath.startsWith('/') ||
+        relativePath.includes('..')
+      ) {
+        return null
+      }
+
+      const documentDirectory = dirname(documentPath)
+      const imagePath = resolve(documentDirectory, relativePath)
+      if (!isPathInside(documentDirectory, imagePath)) {
+        return null
+      }
+
+      try {
+        const data = await fs.readFile(imagePath)
+        return `data:${imageMimeType(imagePath)};base64,${data.toString('base64')}`
+      } catch {
+        return null
+      }
+    }
+  )
 
   ipcMain.handle('file:save-as', async (event, payload: unknown): Promise<OpenedFile | null> => {
     if (

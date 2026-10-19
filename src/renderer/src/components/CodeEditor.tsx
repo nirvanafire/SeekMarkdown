@@ -21,9 +21,26 @@ interface CodeEditorProps {
   onChange: (value: string) => void
 }
 
+export interface EditorPosition {
+  cursor: number
+  scrollRatio: number
+}
+
+export interface EditorTextReplacement {
+  from: number
+  to: number
+  text: string
+}
+
 export interface CodeEditorHandle {
   execute(action: EditorAction): void
   focus(): void
+  setSelection(from: number, to?: number): void
+  replaceRange(from: number, to: number, text: string, selectStart?: number, selectEnd?: number): void
+  replaceAll(replacements: EditorTextReplacement[]): void
+  insertText(text: string): void
+  getPosition(): EditorPosition
+  setPosition(position: EditorPosition | null): void
 }
 
 const syntaxStyle = HighlightStyle.define([
@@ -133,6 +150,94 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       },
       focus() {
         viewRef.current?.focus()
+      },
+      setSelection(from, to = from) {
+        const view = viewRef.current
+        if (!view) {
+          return
+        }
+        const start = Math.max(0, Math.min(from, view.state.doc.length))
+        const end = Math.max(start, Math.min(to, view.state.doc.length))
+        view.dispatch({ selection: { anchor: start, head: end }, scrollIntoView: true })
+        view.focus()
+      },
+      replaceRange(from, to, text, selectStart = from + text.length, selectEnd = selectStart) {
+        const view = viewRef.current
+        if (!view) {
+          return
+        }
+        const start = Math.max(0, Math.min(from, view.state.doc.length))
+        const end = Math.max(start, Math.min(to, view.state.doc.length))
+        const nextLength = view.state.doc.length - (end - start) + text.length
+        view.dispatch({
+          changes: { from: start, to: end, insert: text },
+          selection: {
+            anchor: Math.max(0, Math.min(selectStart, nextLength)),
+            head: Math.max(0, Math.min(selectEnd, nextLength))
+          },
+          userEvent: 'input'
+        })
+        view.focus()
+      },
+      replaceAll(replacements) {
+        const view = viewRef.current
+        if (!view || replacements.length === 0) {
+          return
+        }
+        const ordered = [...replacements].sort((a, b) => a.from - b.from)
+        view.dispatch({
+          changes: ordered.map(({ from, to, text }) => ({ from, to, insert: text })),
+          selection: { anchor: view.state.doc.length },
+          userEvent: 'input'
+        })
+        view.focus()
+      },
+      insertText(text) {
+        const view = viewRef.current
+        if (!view) {
+          return
+        }
+        const selection = view.state.selection.main
+        const start = selection.from
+        const end = selection.to
+        const cursor = start + text.length
+        view.dispatch({
+          changes: { from: start, to: end, insert: text },
+          selection: { anchor: cursor, head: cursor },
+          userEvent: 'input'
+        })
+        view.focus()
+      },
+      getPosition() {
+        const view = viewRef.current
+        if (!view) {
+          return { cursor: 0, scrollRatio: 0 }
+        }
+
+        const scroller = view.scrollDOM
+        const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+        return {
+          cursor: view.state.selection.main.anchor,
+          scrollRatio: maxScrollTop > 0 ? scroller.scrollTop / maxScrollTop : 0
+        }
+      },
+      setPosition(position) {
+        const view = viewRef.current
+        if (!view) {
+          return
+        }
+
+        const cursor = position
+          ? Math.max(0, Math.min(position.cursor, view.state.doc.length))
+          : 0
+        const scrollRatio = position ? Math.max(0, Math.min(position.scrollRatio, 1)) : 0
+        view.dispatch({
+          selection: { anchor: cursor }
+        })
+
+        const scroller = view.scrollDOM
+        const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+        scroller.scrollTop = scrollRatio * maxScrollTop
       }
     }),
     []
