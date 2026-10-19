@@ -639,6 +639,15 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  const toggleSearch = useCallback(() => {
+    if (searchOpen) {
+      setSearchOpen(false)
+      editorRef.current?.focus()
+      return
+    }
+    openSearch(true)
+  }, [openSearch, searchOpen])
+
   const navigateSearch = useCallback(
     (direction: SearchDirection) => {
       if (searchMatches.length === 0) {
@@ -1257,10 +1266,20 @@ export default function App(): JSX.Element {
         <section className="sidebar-section" aria-labelledby="tool-tools-title">
           <h2 id="tool-tools-title">工具</h2>
           <div className="sidebar-actions" role="toolbar" aria-label="写作与阅读工具">
-            <NeuIconButton label="查找和替换" title="查找和替换" onClick={() => openSearch(true)}>
+            <NeuIconButton
+              label="查找和替换"
+              title="查找和替换"
+              aria-pressed={searchOpen}
+              onClick={toggleSearch}
+            >
               <Search aria-hidden="true" />
             </NeuIconButton>
-            <NeuIconButton label="文档大纲" title="文档大纲" onClick={() => setOutlineOpen(true)}>
+            <NeuIconButton
+              label="文档大纲"
+              title="文档大纲"
+              aria-pressed={outlineOpen}
+              onClick={() => setOutlineOpen((value) => !value)}
+            >
               <ListTree aria-hidden="true" />
             </NeuIconButton>
             <NeuIconButton label="书签和批注" title="书签和批注" onClick={() => setReviewOpen(true)}>

@@ -559,6 +559,24 @@ describe('App writing and reading tools', () => {
     expect(screen.getByLabelText('markdown-editor')).toHaveValue('# chapter\n\nchapter again')
   })
 
+  it('toggles the floating search panel from the sidebar', async () => {
+    render(<App />)
+    const button = screen.getByRole('button', { name: '查找和替换' })
+    await userEvent.click(button)
+    expect(screen.getByRole('search')).toHaveClass('search-console')
+    await userEvent.click(button)
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
+  })
+
+  it('toggles the outline panel from the sidebar', async () => {
+    render(<App />)
+    const button = screen.getByRole('button', { name: '文档大纲' })
+    await userEvent.click(button)
+    expect(screen.getByRole('dialog', { name: '文档大纲' })).toBeInTheDocument()
+    await userEvent.click(button)
+    expect(screen.queryByRole('dialog', { name: '文档大纲' })).not.toBeInTheDocument()
+  })
+
   it('shows the outline and jumps to a heading', async () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('markdown-editor'), {

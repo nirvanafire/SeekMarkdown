@@ -248,6 +248,7 @@ function Preview({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSanitize]}
         skipHtml
+        urlTransform={(url) => url}
         components={{
           a: PreviewLink,
           img: ({ src, alt }) => <PreviewImage src={src} alt={alt} documentPath={documentPath} />

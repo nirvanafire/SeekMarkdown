@@ -73,7 +73,7 @@ describe('Preview', () => {
 
     const { container } = render(
       <Preview
-        content="![本地图片](assets/picture.png)"
+        content="![本地图片](./assets/picture.png)"
         documentPath="/tmp/document.md"
       />
     )
@@ -81,7 +81,7 @@ describe('Preview', () => {
     await waitFor(() => {
       expect(container.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,dGVzdA==')
     })
-    expect(readLocalImage).toHaveBeenCalledWith('/tmp/document.md', 'assets/picture.png')
+    expect(readLocalImage).toHaveBeenCalledWith('/tmp/document.md', './assets/picture.png')
   })
 
   it('highlights search results and saved annotations', () => {

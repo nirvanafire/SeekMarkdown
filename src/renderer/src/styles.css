@@ -1283,11 +1283,16 @@ button:focus-visible,
   position: fixed;
   z-index: 25;
   top: 54px;
-  right: 26px;
-  width: min(390px, calc(100vw - 48px));
+  left: 246px;
+  width: min(390px, calc(100vw - 286px));
   padding: 18px;
   background: var(--neu-surface);
   box-shadow: var(--neu-raised-strong);
+}
+
+.app-shell.sidebar-collapsed .search-console {
+  left: 90px;
+  width: min(390px, calc(100vw - 130px));
 }
 
 .search-console-heading,

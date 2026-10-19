@@ -368,16 +368,28 @@ function registerIpcHandlers(): void {
       if (
         typeof documentPath !== 'string' ||
         typeof relativePath !== 'string' ||
-        !isAbsolute(documentPath) ||
-        !imageExtensions.has(extname(relativePath).toLowerCase()) ||
-        relativePath.startsWith('/') ||
-        relativePath.includes('..')
+        !isAbsolute(documentPath)
+      ) {
+        return null
+      }
+
+      let normalizedPath: string
+      try {
+        normalizedPath = decodeURIComponent(relativePath).replace(/^\.\//, '')
+      } catch {
+        return null
+      }
+
+      if (
+        !imageExtensions.has(extname(normalizedPath).toLowerCase()) ||
+        normalizedPath.startsWith('/') ||
+        normalizedPath.split(/[\\/]/).includes('..')
       ) {
         return null
       }
 
       const documentDirectory = dirname(documentPath)
-      const imagePath = resolve(documentDirectory, relativePath)
+      const imagePath = resolve(documentDirectory, normalizedPath)
       if (!isPathInside(documentDirectory, imagePath)) {
         return null
       }
