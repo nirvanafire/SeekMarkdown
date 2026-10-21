@@ -7,8 +7,7 @@ import {
   ChevronRight,
   CircleAlert,
   Code2,
-  Columns2,
-  Eye,
+  FileCode2,
   FileDown,
   FileText,
   FolderOpen,
@@ -30,7 +29,6 @@ import {
   Plus,
   Quote,
   Redo2,
-  RefreshCw,
   Replace,
   Save,
   Search,
@@ -47,17 +45,14 @@ import {
   useMemo,
   useRef,
   useState,
-  type DragEvent as ReactDragEvent,
-  type PointerEvent as ReactPointerEvent
+  type DragEvent as ReactDragEvent
 } from 'react'
 import CodeEditor, { type CodeEditorHandle, type EditorPosition } from './components/CodeEditor'
-import Preview from './components/Preview'
 import {
   NeuButton,
   NeuIconButton,
   NeuPanel,
-  NeuStatus,
-  NeuToggle
+  NeuStatus
 } from './components/neumorphic'
 import type { EditorAction } from './editor/markdownCommands'
 import {
@@ -123,22 +118,6 @@ function formatReadingTime(minutes: number): string {
 
 function clampRatio(value: number): number {
   return Math.max(0, Math.min(value, 1))
-}
-
-function getScrollRatio(element: HTMLElement | null): number {
-  if (!element) {
-    return 0
-  }
-  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
-  return maxScrollTop > 0 ? clampRatio(element.scrollTop / maxScrollTop) : 0
-}
-
-function setScrollRatio(element: HTMLElement | null, ratio: number): void {
-  if (!element) {
-    return
-  }
-  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
-  element.scrollTop = clampRatio(ratio) * maxScrollTop
 }
 
 function readPositions(): Record<string, FileReadingPosition> {
@@ -269,9 +248,7 @@ export default function App(): JSX.Element {
   const [savePhase, setSavePhase] = useState<SavePhase>('idle')
   const [prompt, setPrompt] = useState<PromptKind | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
-  const [splitPercent, setSplitPercent] = useState(50)
-  const [previewEnabled, setPreviewEnabled] = useState(false)
-  const [previewOnly, setPreviewOnly] = useState(false)
+  const [sourceMode, setSourceMode] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const [history, setHistory] = useState<FileHistoryEntry[]>(readHistory)
@@ -279,7 +256,6 @@ export default function App(): JSX.Element {
   const [readingList, setReadingList] = useState<FileInfo[]>(readReadingList)
   const [readingListOpen, setReadingListOpen] = useState(false)
   const [readingListDragActive, setReadingListDragActive] = useState(false)
-  const [autosaveEnabled, setAutosaveEnabled] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [replaceOpen, setReplaceOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -297,13 +273,10 @@ export default function App(): JSX.Element {
   } | null>(null)
   const [readingProgress, setReadingProgress] = useState(0)
   const [currentHeading, setCurrentHeading] = useState<string | null>(null)
-  const workspaceRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<CodeEditorHandle | null>(null)
-  const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const filePositionsRef = useRef<Record<string, FileReadingPosition>>(readPositions())
   const readingListItemRefs = useRef(new Map<string, HTMLButtonElement>())
   const restoreFrameRef = useRef<number | null>(null)
-  const draggingSplitRef = useRef(false)
   const pendingOpenRef = useRef<PendingOpen | null>(null)
   const dragDepthRef = useRef(0)
   const readingListDragDepthRef = useRef(0)
@@ -317,6 +290,10 @@ export default function App(): JSX.Element {
     () => findSearchMatches(content, searchQuery, searchOptions),
     [content, searchOptions, searchQuery]
   )
+  const activeSearchRange = useMemo(() => {
+    const match = searchMatches[activeSearchIndex]
+    return match ? { start: match.start, end: match.end } : null
+  }, [activeSearchIndex, searchMatches])
   const readingMinutes = useMemo(() => Math.max(1, characterCount / 420), [characterCount])
   const currentBookmarks = useMemo(
     () => bookmarks.filter((bookmark) => bookmark.path === file?.path),
@@ -342,7 +319,7 @@ export default function App(): JSX.Element {
 
     const position: FileReadingPosition = {
       editor: editorRef.current?.getPosition() ?? { cursor: 0, scrollRatio: 0 },
-      preview: { scrollRatio: getScrollRatio(previewScrollRef.current) }
+      preview: { scrollRatio: 0 }
     }
     filePositionsRef.current = {
       ...filePositionsRef.current,
@@ -371,7 +348,6 @@ export default function App(): JSX.Element {
         cursor: Math.max(0, Math.min(position.editor.cursor, contentLength)),
         scrollRatio: clampRatio(position.editor.scrollRatio)
       })
-      setScrollRatio(previewScrollRef.current, position.preview.scrollRatio)
     })
   }, [])
 
@@ -526,7 +502,7 @@ export default function App(): JSX.Element {
   }, [content, file, saveFileAs, showNotice])
 
   useEffect(() => {
-    if (!autosaveEnabled || !file || content === savedContent) {
+    if (!file || content === savedContent) {
       return
     }
 
@@ -534,7 +510,7 @@ export default function App(): JSX.Element {
       void persistCurrent(false)
     }, 1500)
     return () => window.clearTimeout(timer)
-  }, [autosaveEnabled, content, file, persistCurrent, savedContent])
+  }, [content, file, persistCurrent, savedContent])
 
   const requestOpen = useCallback(() => {
     pendingOpenRef.current = { kind: 'dialog' }
@@ -708,15 +684,8 @@ export default function App(): JSX.Element {
 
   const jumpToOutlineItem = useCallback((item: MarkdownOutlineItem) => {
     setOutlineOpen(false)
-    if (!previewOnly) {
-      editorRef.current?.setSelection(item.start, item.end)
-    }
-    if (previewEnabled || previewOnly) {
-      window.requestAnimationFrame(() => {
-        document.getElementById(item.id)?.scrollIntoView({ block: 'start' })
-      })
-    }
-  }, [previewEnabled, previewOnly])
+    editorRef.current?.setSelection(item.start, item.end)
+  }, [])
 
   const insertLocalImage = useCallback(async () => {
     if (!file) {
@@ -807,22 +776,8 @@ export default function App(): JSX.Element {
     openSearch(false)
   }, [openSearch])
 
-  const handlePreviewScroll = useCallback(() => {
-    const container = previewScrollRef.current
-    if (!container) {
-      return
-    }
-
-    setReadingProgress(getScrollRatio(container))
-    const containerTop = container.getBoundingClientRect().top
-    let heading: string | null = null
-    for (const element of container.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
-      if (element.getBoundingClientRect().top <= containerTop + 32) {
-        heading = element.textContent
-      } else {
-        break
-      }
-    }
+  const handleEditorScroll = useCallback((progress: number, heading: string | null) => {
+    setReadingProgress(progress)
     setCurrentHeading(heading)
   }, [])
 
@@ -1018,29 +973,6 @@ export default function App(): JSX.Element {
     editorRef.current?.execute(action)
   }, [])
 
-  const handleSplitPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    draggingSplitRef.current = true
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  const handleSplitPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const workspace = workspaceRef.current
-    if (!draggingSplitRef.current || !workspace) {
-      return
-    }
-
-    const bounds = workspace.getBoundingClientRect()
-    const next = ((event.clientX - bounds.left) / bounds.width) * 100
-    setSplitPercent(Math.min(72, Math.max(28, next)))
-  }
-
-  const handleSplitPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    draggingSplitRef.current = false
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-  }
-
   const hasDraggedFiles = (event: ReactDragEvent<HTMLElement>): boolean => {
     return Array.from(event.dataTransfer.types).includes('Files')
   }
@@ -1138,9 +1070,6 @@ export default function App(): JSX.Element {
   const statusLabel = savePhase === 'saving' ? '正在保存' : dirty ? '未保存' : file ? '已保存' : '就绪'
   const statusTone = savePhase === 'saving' ? 'saving' : dirty ? 'dirty' : file ? 'saved' : 'idle'
   const formatDisabled = false
-  const showSource = !previewOnly
-  const showPreview = previewEnabled || previewOnly
-  const splitView = showSource && showPreview
   const activeReadingIndex = file
     ? readingList.findIndex((item) => item.path === file.path)
     : -1
@@ -1222,46 +1151,6 @@ export default function App(): JSX.Element {
           </div>
         </section>
 
-        <section className="sidebar-section" aria-labelledby="view-tools-title">
-          <h2 id="view-tools-title">视图</h2>
-          <NeuToggle
-            checked={previewEnabled}
-            onCheckedChange={setPreviewEnabled}
-            label="实时预览"
-            description={previewOnly ? '预览模式' : previewEnabled ? '分栏显示' : '专注编辑'}
-          />
-          <NeuButton
-            variant={previewOnly ? 'primary' : 'secondary'}
-            size="sm"
-            className="sidebar-wide-button"
-            title={previewOnly ? '退出预览' : '预览模式'}
-            aria-label={previewOnly ? '退出预览' : '预览模式'}
-            pressed={previewOnly}
-            onClick={() => setPreviewOnly((value) => !value)}
-          >
-            <Eye aria-hidden="true" />
-            {previewOnly ? '退出预览' : '预览模式'}
-          </NeuButton>
-          <NeuToggle
-            checked={autosaveEnabled}
-            onCheckedChange={setAutosaveEnabled}
-            label="自动保存"
-            description={autosaveEnabled ? '停止输入 1.5 秒后保存' : '仅手动保存'}
-          />
-          <NeuButton
-            variant="secondary"
-            size="sm"
-            className="sidebar-wide-button"
-            title="重置分栏"
-            aria-label="重置分栏"
-            disabled={!splitView}
-            onClick={() => setSplitPercent(50)}
-          >
-            <Columns2 aria-hidden="true" />
-            重置分栏
-          </NeuButton>
-        </section>
-
         {!sidebarCollapsed && (
         <section className="sidebar-section" aria-labelledby="tool-tools-title">
           <h2 id="tool-tools-title">工具</h2>
@@ -1287,6 +1176,14 @@ export default function App(): JSX.Element {
             </NeuIconButton>
             <NeuIconButton label="插入本地图片" title="插入本地图片" onClick={() => void insertLocalImage()}>
               <ImagePlus aria-hidden="true" />
+            </NeuIconButton>
+            <NeuIconButton
+              label="源码模式"
+              title={sourceMode ? '退出源码模式' : '源码模式'}
+              aria-pressed={sourceMode}
+              onClick={() => setSourceMode((value) => !value)}
+            >
+              <FileCode2 aria-hidden="true" />
             </NeuIconButton>
           </div>
         </section>
@@ -1466,91 +1363,39 @@ export default function App(): JSX.Element {
         </NeuPanel>
       </NeuPanel>
 
-      <main
-        className={`workspace ${splitView ? '' : 'workspace--single-panel'}`}
-        ref={workspaceRef}
-        style={{
-          gridTemplateColumns: splitView
-            ? `${splitPercent}fr 10px ${100 - splitPercent}fr`
-            : 'minmax(0, 1fr)'
-        }}
-      >
-        {showSource && (
+      <main className="workspace workspace--single-panel">
         <NeuPanel
           as="section"
           surface="raised"
-          className="editor-panel"
-          aria-label="Markdown 编辑器"
+          className="editor-panel unified-editor-panel"
+          aria-label="内容编辑区"
         >
           <div className="panel-heading">
             <div>
-              <span className="panel-index">01</span>
-              <h2>源码</h2>
+              <span className="panel-index">{sourceMode ? 'MD' : '01'}</span>
+              <h2>{sourceMode ? '源码' : '内容'}</h2>
             </div>
-            <span>Markdown</span>
+            <div className="reading-instrument" aria-label="阅读进度">
+              <span><Percent aria-hidden="true" /> {Math.round(readingProgress * 100)}%</span>
+              <span>剩余 {formatReadingTime(readingMinutes * (1 - readingProgress))}</span>
+              <span title={currentHeading ?? '文档开头'}>{currentHeading ?? '文档开头'}</span>
+              <i aria-hidden="true"><b style={{ width: `${Math.round(readingProgress * 100)}%` }} /></i>
+            </div>
           </div>
           <div className="panel-body">
-            <CodeEditor ref={editorRef} value={content} onChange={setContent} />
+            <CodeEditor
+              ref={editorRef}
+              value={content}
+              onChange={setContent}
+              renderMode={sourceMode ? 'source' : 'unified'}
+              documentPath={file?.path}
+              searchQuery={searchQuery}
+              searchOptions={searchOptions}
+              activeSearchRange={activeSearchRange}
+              onScrollChange={handleEditorScroll}
+            />
           </div>
         </NeuPanel>
-        )}
-
-        {splitView && (
-          <div
-            className="split-handle"
-            role="separator"
-            aria-label="调整编辑器与预览宽度"
-            aria-orientation="vertical"
-            aria-valuenow={Math.round(splitPercent)}
-            aria-valuemin={28}
-            aria-valuemax={72}
-            onPointerDown={handleSplitPointerDown}
-            onPointerMove={handleSplitPointerMove}
-            onPointerUp={handleSplitPointerUp}
-            onPointerCancel={handleSplitPointerUp}
-          >
-            <i aria-hidden="true" />
-          </div>
-        )}
-
-        {showPreview && (
-          <NeuPanel
-            as="section"
-            surface="raised"
-            className="preview-panel"
-            aria-label="Markdown 预览"
-          >
-            <div className="panel-heading preview-heading">
-              <div>
-                <span className="panel-index">02</span>
-                <h2>预览</h2>
-              </div>
-              <div className="reading-instrument" aria-label="阅读进度">
-                <span><Percent aria-hidden="true" /> {Math.round(readingProgress * 100)}%</span>
-                <span>剩余 {formatReadingTime(readingMinutes * (1 - readingProgress))}</span>
-                <span title={currentHeading ?? '文档开头'}>{currentHeading ?? '文档开头'}</span>
-                <i aria-hidden="true"><b style={{ width: `${Math.round(readingProgress * 100)}%` }} /></i>
-              </div>
-            </div>
-            <div className="panel-body preview-scroll" ref={previewScrollRef} onScroll={handlePreviewScroll}>
-              {content ? (
-                <Preview
-                  content={content}
-                  documentPath={file?.path}
-                  searchTerm={searchQuery}
-                  searchOptions={searchOptions}
-                  activeSearchIndex={activeSearchIndex}
-                  annotations={currentAnnotations.map(({ id, quote, note }) => ({ id, quote, note }))}
-                />
-              ) : (
-                <div className="preview-empty">
-                  <RefreshCw aria-hidden="true" />
-                  <p>预览会随着源码输入即时更新</p>
-                </div>
-              )}
-            </div>
-          </NeuPanel>
-        )}
       </main>
 
 

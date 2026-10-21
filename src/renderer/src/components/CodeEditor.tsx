@@ -15,10 +15,21 @@ import {
 import { tags } from '@lezer/highlight'
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { applyMarkdownAction, type EditorAction } from '../editor/markdownCommands'
+import { defaultSearchOptions, type SearchOptions } from '../editor/search'
+import {
+  createUnifiedEditorExtensions,
+  type UnifiedConfig
+} from '../editor/unifiedDecorations'
 
 interface CodeEditorProps {
   value: string
   onChange: (value: string) => void
+  renderMode?: 'unified' | 'source'
+  documentPath?: string
+  searchQuery?: string
+  searchOptions?: SearchOptions
+  activeSearchRange?: { start: number; end: number } | null
+  onScrollChange?: (progress: number, heading: string | null) => void
 }
 
 export interface EditorPosition {
@@ -107,13 +118,44 @@ const editorTheme = EditorView.theme({
   }
 })
 
+function getCurrentHeading(view: EditorView): string | null {
+  const firstVisibleLine = view.state.doc.lineAt(view.viewport.from).number
+  for (let lineNumber = firstVisibleLine; lineNumber >= 1; lineNumber -= 1) {
+    const line = view.state.doc.line(lineNumber)
+    const heading = line.text.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*$/)
+    if (heading) {
+      return heading[1]
+    }
+  }
+  return null
+}
+
 const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
-  { value, onChange },
+  {
+    value,
+    onChange,
+    renderMode = 'unified',
+    documentPath,
+    searchQuery = '',
+    searchOptions = defaultSearchOptions,
+    activeSearchRange = null,
+    onScrollChange
+  },
   ref
 ): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const initialValueRef = useRef(value)
+  const initialConfigRef = useRef<UnifiedConfig>({
+    renderMode,
+    documentPath,
+    searchQuery,
+    searchOptions,
+    activeSearchRange
+  })
+  const unifiedExtensionRef = useRef(createUnifiedEditorExtensions(initialConfigRef.current))
+  const onScrollChangeRef = useRef(onScrollChange)
+  onScrollChangeRef.current = onScrollChange
 
   useImperativeHandle(
     ref,
@@ -238,6 +280,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
         const scroller = view.scrollDOM
         const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
         scroller.scrollTop = scrollRatio * maxScrollTop
+        window.requestAnimationFrame(() => {
+          const nextMaxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+          const progress = nextMaxScrollTop > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / nextMaxScrollTop)) : 1
+          onScrollChangeRef.current?.(progress, getCurrentHeading(view))
+        })
       }
     }),
     []
@@ -246,6 +293,17 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   useEffect(() => {
     if (!hostRef.current) {
       return
+    }
+
+    const notifyScroll = () => {
+      const currentView = viewRef.current
+      if (!currentView) {
+        return
+      }
+      const scroller = currentView.scrollDOM
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+      const progress = maxScrollTop > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / maxScrollTop)) : 1
+      onScrollChangeRef.current?.(progress, getCurrentHeading(currentView))
     }
 
     const view = new EditorView({
@@ -262,10 +320,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(syntaxStyle),
           editorTheme,
+          unifiedExtensionRef.current.extensions,
           EditorView.lineWrapping,
           placeholder('从这里开始书写 Markdown…'),
           EditorView.contentAttributes.of({
-            'aria-label': 'Markdown 源码编辑器',
+            'aria-label': 'Markdown 内容编辑区',
             spellcheck: 'false'
           }),
           EditorView.updateListener.of((update) => {
@@ -278,11 +337,30 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     })
 
     viewRef.current = view
+    view.scrollDOM.addEventListener('scroll', notifyScroll, { passive: true })
+    window.requestAnimationFrame(notifyScroll)
+
     return () => {
+      view.scrollDOM.removeEventListener('scroll', notifyScroll)
       view.destroy()
       viewRef.current = null
     }
   }, [onChange])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) {
+      return
+    }
+
+    unifiedExtensionRef.current.update(view, {
+      renderMode,
+      documentPath,
+      searchQuery,
+      searchOptions,
+      activeSearchRange
+    })
+  }, [activeSearchRange, documentPath, renderMode, searchOptions, searchQuery])
 
   useEffect(() => {
     const view = viewRef.current
@@ -299,9 +377,20 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       changes: { from: 0, to: view.state.doc.length, insert: value },
       selection: { anchor: Math.min(view.state.selection.main.anchor, value.length) }
     })
+    window.requestAnimationFrame(() => {
+      const scroller = view.scrollDOM
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+      const progress = maxScrollTop > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / maxScrollTop)) : 1
+      onScrollChangeRef.current?.(progress, getCurrentHeading(view))
+    })
   }, [value])
 
-  return <div ref={hostRef} className="code-editor" />
+  return (
+    <div
+      ref={hostRef}
+      className={`code-editor code-editor--${renderMode}`}
+    />
+  )
 })
 
 export default CodeEditor

@@ -18,16 +18,14 @@ test('launches, edits, saves, and protects unsaved Markdown', async () => {
   await expect(page.locator('.document-copy strong')).toHaveText('sample.md')
   await expect(page.locator('.editor-panel')).toBeVisible()
   await expect(page.locator('.preview-panel')).toHaveCount(0)
-
-  await page.getByRole('switch', { name: '自动保存' }).click()
-  await page.getByRole('switch', { name: '实时预览' }).click()
-  await expect(page.locator('.markdown-preview h1')).toHaveText('初始文档')
+  await expect(page.locator('.unified-editor-panel')).toBeVisible()
+  await expect(page.locator('.cm-unified-heading').first()).toContainText('初始文档')
 
   const editor = page.locator('.cm-content')
   await editor.click()
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('# 已保存的文档\n\n保存流程正常。')
-  await expect(page.locator('.markdown-preview h1')).toHaveText('已保存的文档')
+  await expect(page.locator('.cm-unified-heading').first()).toContainText('已保存的文档')
   await expect(page.locator('.dirty-indicator')).toContainText('未保存')
 
   await page.locator('button[title="保存"]').click()
@@ -60,7 +58,7 @@ test('launches, edits, saves, and protects unsaved Markdown', async () => {
   await app.close()
 })
 
-test('uses sidebar shortcuts and can hide preview', async () => {
+test('uses sidebar shortcuts and source mode', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'seermarkdown-sidebar-e2e-'))
   const fixturePath = join(workingDirectory, 'shortcuts.md')
   await writeFile(fixturePath, '快捷工具', 'utf8')
@@ -70,40 +68,38 @@ test('uses sidebar shortcuts and can hide preview', async () => {
   })
   const page = await app.firstWindow()
 
-  await expect(page.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.sidebar')).toBeVisible()
+  await expect(page.getByRole('button', { name: '源码模式' })).toHaveAttribute('aria-pressed', 'false')
 
   await page.getByRole('button', { name: '打开历史记录' }).click()
   await expect(page.getByRole('dialog', { name: '打开历史' })).toContainText('shortcuts.md')
   await page.getByRole('button', { name: /shortcuts\.md/ }).click()
   await expect(page.locator('.document-copy strong')).toHaveText('shortcuts.md')
 
-  await page.getByRole('switch', { name: '实时预览' }).click()
-
   await page.locator('.cm-content').click()
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('快捷工具')
   await page.locator('button[title="二级标题"]').click()
-  await expect(page.locator('.markdown-preview h2')).toHaveText('快捷工具')
+  await expect(page.locator('.cm-unified-h2')).toContainText('快捷工具')
 
   await page.locator('.cm-content').click()
   await page.keyboard.press('End')
   await page.locator('button[title="插入表格"]').click()
-  await expect(page.locator('.markdown-preview table')).toBeVisible()
+  await expect(page.locator('.unified-table-widget')).toBeVisible()
 
   await page.locator('.cm-content').click()
   await page.keyboard.press('ControlOrMeta+End')
   await page.locator('button[title="代码块"]').click()
-  await expect(page.locator('.markdown-preview pre')).toBeVisible()
+  await expect(page.locator('.unified-code-widget')).toBeVisible()
 
-  await page.getByRole('button', { name: '预览模式' }).click()
-  await expect(page.locator('.editor-panel')).toHaveCount(0)
-  await expect(page.locator('.preview-panel')).toBeVisible()
-
-  await page.getByRole('button', { name: '退出预览' }).click()
-  await page.getByRole('switch', { name: '实时预览' }).click()
+  await page.getByRole('button', { name: '源码模式' }).click()
+  await expect(page.getByRole('button', { name: '源码模式' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.cm-content')).toContainText('## 快捷工具')
   await expect(page.locator('.preview-panel')).toHaveCount(0)
   await expect(page.locator('.split-handle')).toHaveCount(0)
+
+  await page.getByRole('button', { name: '源码模式' }).click()
+  await expect(page.getByRole('button', { name: '源码模式' })).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.editor-panel')).toBeVisible()
 
   await page.getByRole('button', { name: '收起侧边栏' }).click()
