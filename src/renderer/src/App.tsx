@@ -62,7 +62,12 @@ import {
   replaceSearchMatch,
   type SearchOptions
 } from './editor/search'
-import { extractMarkdownOutline, type MarkdownOutlineItem } from './lib/markdownOutline'
+import {
+  buildOutlineTree,
+  extractMarkdownOutline,
+  type MarkdownOutlineItem,
+  type MarkdownOutlineNode
+} from './lib/markdownOutline'
 import {
   createReadingMarkId,
   readAnnotations,
@@ -241,6 +246,47 @@ function getErrorMessage(error: unknown): string {
   return raw.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
 }
 
+function OutlineTree({
+  nodes,
+  activeHeading,
+  onSelect,
+  nested = false
+}: {
+  nodes: MarkdownOutlineNode[]
+  activeHeading: string | null
+  onSelect: (item: MarkdownOutlineItem) => void
+  nested?: boolean
+}): JSX.Element {
+  return (
+    <ul
+      className="outline-tree"
+      role={nested ? 'group' : 'tree'}
+      aria-label={nested ? undefined : '文档大纲树'}
+    >
+      {nodes.map((node) => (
+        <li key={`${node.id}-${node.start}`} role="none">
+          <button
+            type="button"
+            role="treeitem"
+            aria-level={node.level}
+            aria-selected={activeHeading === node.text}
+            className={`outline-tree-item ${activeHeading === node.text ? 'is-active' : ''}`}
+            onClick={() => onSelect(node)}
+          >
+            <span className="outline-tree-marker" aria-hidden="true" />
+            <span className="outline-tree-level">H{node.level}</span>
+            <span className="outline-tree-label">{node.text}</span>
+            <small>{node.line}</small>
+          </button>
+          {node.children.length > 0 && (
+            <OutlineTree nodes={node.children} activeHeading={activeHeading} onSelect={onSelect} nested />
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function App(): JSX.Element {
   const [file, setFile] = useState<OpenedFile | null>(null)
   const [content, setContent] = useState('')
@@ -250,6 +296,7 @@ export default function App(): JSX.Element {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [sourceMode, setSourceMode] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [inspectorVisible, setInspectorVisible] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const [history, setHistory] = useState<FileHistoryEntry[]>(readHistory)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -262,7 +309,7 @@ export default function App(): JSX.Element {
   const [replaceQuery, setReplaceQuery] = useState('')
   const [searchOptions, setSearchOptions] = useState<SearchOptions>(defaultSearchOptions)
   const [activeSearchIndex, setActiveSearchIndex] = useState(0)
-  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [outlineOpen, setOutlineOpen] = useState(true)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [bookmarks, setBookmarks] = useState<DocumentBookmark[]>(readBookmarks)
   const [annotations, setAnnotations] = useState<DocumentAnnotation[]>(readAnnotations)
@@ -286,6 +333,7 @@ export default function App(): JSX.Element {
   const dirty = useMemo(() => content !== savedContent, [content, savedContent])
   const characterCount = useMemo(() => countVisibleCharacters(content), [content])
   const outline = useMemo(() => extractMarkdownOutline(content), [content])
+  const outlineTree = useMemo(() => buildOutlineTree(outline), [outline])
   const searchMatches = useMemo(
     () => findSearchMatches(content, searchQuery, searchOptions),
     [content, searchOptions, searchQuery]
@@ -624,6 +672,15 @@ export default function App(): JSX.Element {
     openSearch(true)
   }, [openSearch, searchOpen])
 
+  const toggleOutline = useCallback(() => {
+    if (!inspectorVisible) {
+      setInspectorVisible(true)
+      setOutlineOpen(true)
+      return
+    }
+    setOutlineOpen((value) => !value)
+  }, [inspectorVisible])
+
   const navigateSearch = useCallback(
     (direction: SearchDirection) => {
       if (searchMatches.length === 0) {
@@ -683,7 +740,6 @@ export default function App(): JSX.Element {
   }, [content, replaceQuery, searchMatches, searchOptions, searchQuery, showNotice])
 
   const jumpToOutlineItem = useCallback((item: MarkdownOutlineItem) => {
-    setOutlineOpen(false)
     editorRef.current?.setSelection(item.start, item.end)
   }, [])
 
@@ -1081,7 +1137,9 @@ export default function App(): JSX.Element {
 
   return (
     <div
-      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
+      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${
+        inspectorVisible ? 'has-inspector' : ''
+      }`}
       onDragEnter={handleFileDragEnter}
       onDragOver={handleFileDragOver}
       onDragLeave={handleFileDragLeave}
@@ -1151,48 +1209,42 @@ export default function App(): JSX.Element {
           </div>
         </section>
 
-        {!sidebarCollapsed && (
-        <section className="sidebar-section" aria-labelledby="tool-tools-title">
-          <h2 id="tool-tools-title">工具</h2>
-          <div className="sidebar-actions" role="toolbar" aria-label="写作与阅读工具">
-            <NeuIconButton
-              label="查找和替换"
-              title="查找和替换"
-              aria-pressed={searchOpen}
-              onClick={toggleSearch}
-            >
-              <Search aria-hidden="true" />
-            </NeuIconButton>
-            <NeuIconButton
-              label="文档大纲"
-              title="文档大纲"
-              aria-pressed={outlineOpen}
-              onClick={() => setOutlineOpen((value) => !value)}
-            >
-              <ListTree aria-hidden="true" />
-            </NeuIconButton>
-            <NeuIconButton label="书签和批注" title="书签和批注" onClick={() => setReviewOpen(true)}>
-              <Bookmark aria-hidden="true" />
-            </NeuIconButton>
-            <NeuIconButton label="插入本地图片" title="插入本地图片" onClick={() => void insertLocalImage()}>
-              <ImagePlus aria-hidden="true" />
-            </NeuIconButton>
-            <NeuIconButton
-              label="源码模式"
-              title={sourceMode ? '退出源码模式' : '源码模式'}
-              aria-pressed={sourceMode}
-              onClick={() => setSourceMode((value) => !value)}
-            >
-              <FileCode2 aria-hidden="true" />
-            </NeuIconButton>
-          </div>
-        </section>
-        )}
+        <NeuPanel surface="inset" className="sidebar-status">
+          {!sidebarCollapsed && (
+            <div className="sidebar-status-heading">
+              <span>文档状态</span>
+              <span>UTF-8</span>
+            </div>
+          )}
+          <NeuStatus
+            className={`dirty-indicator ${statusTone}`}
+            tone={statusTone}
+            label={statusLabel}
+            compact={sidebarCollapsed}
+          />
+          {!sidebarCollapsed && (
+            <div className="sidebar-metrics">
+              <span>{characterCount} 字符</span>
+              <span>{content.split(/\r?\n/).length} 行</span>
+            </div>
+          )}
+        </NeuPanel>
+      </NeuPanel>
 
-        {!sidebarCollapsed && (
-        <section className="sidebar-section format-section" aria-labelledby="format-tools-title">
-          <h2 id="format-tools-title">格式</h2>
-          <div className="format-grid" role="toolbar" aria-label="Markdown 格式工具">
+      <main className="workspace workspace--single-panel">
+        <NeuPanel
+          as="section"
+          surface="raised"
+          className="editor-panel unified-editor-panel"
+          aria-label="内容编辑区"
+        >
+          <div className="panel-heading">
+            <div>
+              <span className="panel-index">{sourceMode ? 'MD' : '01'}</span>
+              <h2>{sourceMode ? '源码' : '内容'}</h2>
+            </div>
+          <div className="editor-toolbar" role="toolbar" aria-label="Markdown 格式工具">
+            <div className="editor-toolbar-group editor-toolbar-format">
             <NeuIconButton
               className="format-control format-text-control"
               label="一级标题"
@@ -1337,44 +1389,40 @@ export default function App(): JSX.Element {
             >
               <Redo2 aria-hidden="true" />
             </NeuIconButton>
+            </div>
+            <div className="editor-toolbar-group editor-toolbar-actions">
+              <NeuIconButton
+                label="文档大纲"
+                title={inspectorVisible && outlineOpen ? '收起文档大纲' : '文档大纲'}
+                aria-pressed={inspectorVisible && outlineOpen}
+                onClick={toggleOutline}
+              >
+                <ListTree aria-hidden="true" />
+              </NeuIconButton>
+              <NeuIconButton
+                label="查找和替换"
+                title="查找和替换"
+                aria-pressed={searchOpen}
+                onClick={toggleSearch}
+              >
+                <Search aria-hidden="true" />
+              </NeuIconButton>
+              <NeuIconButton label="书签和批注" title="书签和批注" onClick={() => setReviewOpen(true)}>
+                <Bookmark aria-hidden="true" />
+              </NeuIconButton>
+              <NeuIconButton label="插入本地图片" title="插入本地图片" onClick={() => void insertLocalImage()}>
+                <ImagePlus aria-hidden="true" />
+              </NeuIconButton>
+              <NeuIconButton
+                label="源码模式"
+                title={sourceMode ? '退出源码模式' : '源码模式'}
+                aria-pressed={sourceMode}
+                onClick={() => setSourceMode((value) => !value)}
+              >
+                <FileCode2 aria-hidden="true" />
+              </NeuIconButton>
+            </div>
           </div>
-        </section>
-        )}
-
-        <NeuPanel surface="inset" className="sidebar-status">
-          {!sidebarCollapsed && (
-            <div className="sidebar-status-heading">
-              <span>文档状态</span>
-              <span>UTF-8</span>
-            </div>
-          )}
-          <NeuStatus
-            className={`dirty-indicator ${statusTone}`}
-            tone={statusTone}
-            label={statusLabel}
-            compact={sidebarCollapsed}
-          />
-          {!sidebarCollapsed && (
-            <div className="sidebar-metrics">
-              <span>{characterCount} 字符</span>
-              <span>{content.split(/\r?\n/).length} 行</span>
-            </div>
-          )}
-        </NeuPanel>
-      </NeuPanel>
-
-      <main className="workspace workspace--single-panel">
-        <NeuPanel
-          as="section"
-          surface="raised"
-          className="editor-panel unified-editor-panel"
-          aria-label="内容编辑区"
-        >
-          <div className="panel-heading">
-            <div>
-              <span className="panel-index">{sourceMode ? 'MD' : '01'}</span>
-              <h2>{sourceMode ? '源码' : '内容'}</h2>
-            </div>
             <div className="reading-instrument" aria-label="阅读进度">
               <span><Percent aria-hidden="true" /> {Math.round(readingProgress * 100)}%</span>
               <span>剩余 {formatReadingTime(readingMinutes * (1 - readingProgress))}</span>
@@ -1397,6 +1445,52 @@ export default function App(): JSX.Element {
           </div>
         </NeuPanel>
       </main>
+
+      {inspectorVisible && (
+      <NeuPanel
+        as="aside"
+        surface="raised"
+        className="inspector"
+        aria-label="大纲与工具"
+      >
+        <div className="inspector-header">
+          <div>
+            <span className="eyebrow">INSPECTOR</span>
+            <h2>大纲与工具</h2>
+          </div>
+          <NeuIconButton
+            label="关闭右侧边栏"
+            title="关闭右侧边栏"
+            onClick={() => setInspectorVisible(false)}
+          >
+            <X aria-hidden="true" />
+          </NeuIconButton>
+        </div>
+
+        <section className="inspector-content" aria-labelledby="inspector-content-title">
+          <div className="inspector-content-heading">
+            <span className="eyebrow">DOCUMENT MAP</span>
+            <h2 id="inspector-content-title">大纲</h2>
+          </div>
+          {outlineOpen ? (
+            outlineTree.length > 0 ? (
+              <OutlineTree nodes={outlineTree} activeHeading={currentHeading} onSelect={jumpToOutlineItem} />
+            ) : (
+              <div className="inspector-empty">
+                <ListTree aria-hidden="true" />
+                <p>当前文档还没有标题</p>
+              </div>
+            )
+          ) : (
+            <div className="inspector-empty">
+              <ListTree aria-hidden="true" />
+              <p>点击上方图标查看大纲</p>
+            </div>
+          )}
+        </section>
+      </NeuPanel>
+      )}
+
 
 
       {searchOpen && (
@@ -1664,50 +1758,6 @@ export default function App(): JSX.Element {
         </div>
       )}
 
-
-      {outlineOpen && (
-        <div className="modal-backdrop">
-          <NeuPanel
-            as="section"
-            surface="raised"
-            className="history-dialog outline-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="outline-title"
-          >
-            <div className="history-heading">
-              <div>
-                <p className="eyebrow">DOCUMENT MAP</p>
-                <h2 id="outline-title">文档大纲</h2>
-              </div>
-              <NeuIconButton label="关闭文档大纲" title="关闭文档大纲" onClick={() => setOutlineOpen(false)}>
-                <X aria-hidden="true" />
-              </NeuIconButton>
-            </div>
-            {outline.length > 0 ? (
-              <nav className="outline-list" aria-label="Markdown 标题目录">
-                {outline.map((item) => (
-                  <button
-                    key={`${item.id}-${item.start}`}
-                    type="button"
-                    className={`outline-item outline-level-${item.level}`}
-                    onClick={() => jumpToOutlineItem(item)}
-                  >
-                    <span>H{item.level}</span>
-                    <strong>{item.text}</strong>
-                    <small>{item.line}</small>
-                  </button>
-                ))}
-              </nav>
-            ) : (
-              <div className="history-empty">
-                <ListTree aria-hidden="true" />
-                <p>当前文档还没有标题</p>
-              </div>
-            )}
-          </NeuPanel>
-        </div>
-      )}
 
       {reviewOpen && (
         <div className="modal-backdrop">

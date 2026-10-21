@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractMarkdownOutline } from '../markdownOutline'
+import { buildOutlineTree, extractMarkdownOutline } from '../markdownOutline'
 
 describe('markdown outline', () => {
   it('extracts nested headings with source positions', () => {
@@ -22,5 +22,17 @@ describe('markdown outline', () => {
   it('keeps duplicate headings and ignores empty headings', () => {
     const outline = extractMarkdownOutline('# Same\n##\n# Same')
     expect(outline.map((item) => item.text)).toEqual(['Same', 'Same'])
+  })
+
+  it('builds a tree with nested children and recovers from skipped levels', () => {
+    const tree = buildOutlineTree([
+      { id: 'a', level: 1, text: 'A', start: 0, end: 2, line: 1 },
+      { id: 'b', level: 3, text: 'B', start: 3, end: 5, line: 2 },
+      { id: 'c', level: 2, text: 'C', start: 6, end: 8, line: 3 },
+      { id: 'd', level: 1, text: 'D', start: 9, end: 11, line: 4 }
+    ])
+
+    expect(tree.map((node) => node.text)).toEqual(['A', 'D'])
+    expect(tree[0].children.map((node) => node.text)).toEqual(['B', 'C'])
   })
 })

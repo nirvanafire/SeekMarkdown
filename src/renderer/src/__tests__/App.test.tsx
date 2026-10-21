@@ -393,7 +393,9 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.queryByRole('button', { name: '实时预览' })).not.toBeInTheDocument()
-    expect(screen.getByRole('region', { name: '内容编辑区' })).toBeVisible()
+    const editor = screen.getByRole('region', { name: '内容编辑区' })
+    expect(editor).toBeVisible()
+    expect(within(editor).getByRole('toolbar', { name: 'Markdown 格式工具' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Markdown 预览' })).not.toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText('markdown-editor'), '# 统一编辑内容')
@@ -413,12 +415,12 @@ describe('App', () => {
     expect(screen.getByLabelText('文档控制台')).toBeVisible()
     expect(screen.queryByText('格式')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '打开 Markdown 文件' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: '源码模式' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '源码模式' })).toBeVisible()
     expect(screen.queryByText('未打开文件')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '展开侧边栏' }))
     expect(screen.getByLabelText('文档控制台').parentElement).not.toHaveClass('sidebar-collapsed')
-    expect(screen.getByText('格式')).toBeVisible()
+    expect(screen.queryByText('格式')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '源码模式' })).toBeVisible()
   })
 
@@ -559,25 +561,70 @@ describe('App writing and reading tools', () => {
     expect(screen.queryByRole('search')).not.toBeInTheDocument()
   })
 
-  it('toggles the outline panel from the sidebar', async () => {
-    render(<App />)
-    const button = screen.getByRole('button', { name: '文档大纲' })
-    await userEvent.click(button)
-    expect(screen.getByRole('dialog', { name: '文档大纲' })).toBeInTheDocument()
-    await userEvent.click(button)
-    expect(screen.queryByRole('dialog', { name: '文档大纲' })).not.toBeInTheDocument()
-  })
-
-  it('shows the outline and jumps to a heading', async () => {
+  it('toggles the outline content in the right sidebar', async () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('markdown-editor'), {
-      target: { value: '# Overview\n\n## Details' }
+      target: { value: '# Outline\n\n## Child' }
     })
+
+    const button = screen.getByRole('button', { name: '文档大纲' })
+    const editor = screen.getByRole('region', { name: '内容编辑区' })
+    const editorToolbar = within(editor).getByRole('toolbar', { name: 'Markdown 格式工具' })
+    expect(editorToolbar.querySelector('.editor-toolbar-format')).toBeInTheDocument()
+    expect(editorToolbar.querySelector('.editor-toolbar-actions')).toBeInTheDocument()
+    expect(within(editorToolbar).getByRole('button', { name: '插入本地图片' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('大纲与工具')).not.toBeInTheDocument()
+    expect(document.querySelector('.app-shell')).not.toHaveClass('has-inspector')
+
+    await userEvent.click(button)
+    const inspector = screen.getByLabelText('大纲与工具')
+    expect(document.querySelector('.app-shell')).toHaveClass('has-inspector')
+    expect(within(inspector).getByRole('region', { name: '大纲' })).toBeInTheDocument()
+    expect(within(inspector).getByRole('tree', { name: '文档大纲树' })).toBeInTheDocument()
+
+    await userEvent.click(button)
+    expect(screen.queryByRole('tree', { name: '文档大纲树' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('大纲与工具')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭右侧边栏' }))
+    expect(screen.queryByLabelText('大纲与工具')).not.toBeInTheDocument()
+    expect(document.querySelector('.app-shell')).not.toHaveClass('has-inspector')
+  })
+
+  it('shows a nested outline tree and jumps to a heading', async () => {
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('markdown-editor'), {
+      target: { value: '# Overview\n\n## Details\n\n### Detail' }
+    })
+
     await userEvent.click(screen.getByRole('button', { name: '文档大纲' }))
-    expect(screen.getByRole('dialog', { name: '文档大纲' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /Details/ }))
-    expect(screen.queryByRole('dialog', { name: '文档大纲' })).not.toBeInTheDocument()
+    const tree = screen.getByRole('tree', { name: '文档大纲树' })
+    expect(tree).toBeInTheDocument()
+    expect(within(tree).getByRole('treeitem', { name: /Overview/ })).toHaveAttribute('aria-level', '1')
+    expect(within(tree).getByRole('treeitem', { name: /Details/ })).toHaveAttribute('aria-level', '2')
+    const treeItems = within(tree).getAllByRole('treeitem')
+    expect(treeItems[2]).toHaveAttribute('aria-level', '3')
+    expect(treeItems[2]).toHaveTextContent('Detail')
+    expect(within(tree).getAllByRole('group').length).toBeGreaterThan(0)
+    const detailButton = treeItems[2]
+    await userEvent.click(detailButton)
     expect(screen.getByTestId('editor-position')).toHaveAttribute('data-position')
+  })
+
+  it('closes and reopens the right sidebar', async () => {
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('markdown-editor'), {
+      target: { value: '# Outline\n\n## Child' }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: '文档大纲' }))
+    const inspector = screen.getByLabelText('大纲与工具')
+    expect(inspector).toBeVisible()
+    await userEvent.click(within(inspector).getByRole('button', { name: '关闭右侧边栏' }))
+    expect(screen.queryByLabelText('大纲与工具')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '文档大纲' }))
+    expect(screen.getByLabelText('大纲与工具')).toBeVisible()
   })
 
   it('auto-saves an existing document after the debounce', async () => {

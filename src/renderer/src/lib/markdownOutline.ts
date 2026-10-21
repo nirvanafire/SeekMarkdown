@@ -11,6 +11,32 @@ function cleanHeadingText(value: string): string {
   return value.trim().replace(/\s+#+\s*$/, '').trim()
 }
 
+export interface MarkdownOutlineNode extends MarkdownOutlineItem {
+  children: MarkdownOutlineNode[]
+}
+
+export function buildOutlineTree(items: MarkdownOutlineItem[]): MarkdownOutlineNode[] {
+  const roots: MarkdownOutlineNode[] = []
+  const stack: MarkdownOutlineNode[] = []
+
+  for (const item of items) {
+    const node: MarkdownOutlineNode = { ...item, children: [] }
+    while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
+      stack.pop()
+    }
+
+    const parent = stack[stack.length - 1]
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+    stack.push(node)
+  }
+
+  return roots
+}
+
 export function extractMarkdownOutline(content: string): MarkdownOutlineItem[] {
   const items: MarkdownOutlineItem[] = []
   const lines = content.split('\n')
