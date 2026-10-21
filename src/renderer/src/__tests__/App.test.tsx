@@ -70,10 +70,6 @@ vi.mock('../components/CodeEditor', async () => {
   }
 })
 
-vi.mock('../components/Preview', () => ({
-  default: ({ content }: { content: string }) => <div data-testid="preview-text">{content}</div>
-}))
-
 const api = {
   openFile: vi.fn(),
   getFileInfo: vi.fn(),
@@ -115,7 +111,6 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByLabelText('markdown-editor')).toHaveValue('')
-    expect(screen.queryByTestId('preview-text')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '打开 Markdown 文件' }))
     await waitFor(() => {
@@ -394,25 +389,20 @@ describe('App', () => {
     expect(api.openFileByPath).not.toHaveBeenCalledWith('/tmp/three.md')
   })
 
-  it('switches between split preview and preview-only mode', async () => {
+  it('uses a unified content editor and toggles source mode', async () => {
     render(<App />)
 
-    expect(screen.getByRole('switch', { name: '实时预览' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByRole('button', { name: '实时预览' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '内容编辑区' })).toBeVisible()
+    expect(screen.queryByRole('region', { name: 'Markdown 预览' })).not.toBeInTheDocument()
 
-    await userEvent.type(screen.getByLabelText('markdown-editor'), '# 预览内容')
-    fireEvent.click(screen.getByRole('switch', { name: '实时预览' }))
-    await waitFor(() => {
-      expect(screen.getByTestId('preview-text')).toBeInTheDocument()
-    })
-    expect(screen.getByLabelText('markdown-editor')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('markdown-editor'), '# 统一编辑内容')
+    const sourceButton = screen.getByRole('button', { name: '源码模式' })
+    await userEvent.click(sourceButton)
+    expect(sourceButton).toHaveAttribute('aria-pressed', 'true')
 
-    await userEvent.click(screen.getByRole('button', { name: '预览模式' }))
-    expect(screen.getByTestId('preview-text')).toBeInTheDocument()
-    expect(screen.queryByLabelText('markdown-editor')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '退出预览' })).toHaveAttribute('aria-pressed', 'true')
-
-    await userEvent.click(screen.getByRole('button', { name: '退出预览' }))
-    expect(screen.getByLabelText('markdown-editor')).toBeInTheDocument()
+    await userEvent.click(sourceButton)
+    expect(sourceButton).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('collapses and restores the sidebar icon rail', async () => {
@@ -423,12 +413,13 @@ describe('App', () => {
     expect(screen.getByLabelText('文档控制台')).toBeVisible()
     expect(screen.queryByText('格式')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '打开 Markdown 文件' })).toBeVisible()
-    expect(screen.getByRole('button', { name: '预览模式' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: '源码模式' })).not.toBeInTheDocument()
     expect(screen.queryByText('未打开文件')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '展开侧边栏' }))
     expect(screen.getByLabelText('文档控制台').parentElement).not.toHaveClass('sidebar-collapsed')
     expect(screen.getByText('格式')).toBeVisible()
+    expect(screen.getByRole('button', { name: '源码模式' })).toBeVisible()
   })
 
   it('tracks dirty state and saves through the file bridge', async () => {
