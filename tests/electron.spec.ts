@@ -104,10 +104,21 @@ test('uses sidebar shortcuts and source mode', async () => {
 
   await page.getByRole('button', { name: '收起侧边栏' }).click()
   await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
-  await expect(page.locator('.format-section')).toHaveCount(0)
+  await expect(page.locator('.editor-toolbar')).toBeVisible()
   await expect(page.locator('.window-drag-region')).toBeVisible()
   await page.getByRole('button', { name: '展开侧边栏' }).click()
   await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
+  await expect(page.locator('.inspector')).toHaveCount(0)
+  await expect(page.locator('.app-shell')).not.toHaveClass(/has-inspector/)
+  await page.getByRole('button', { name: '文档大纲' }).click()
+  await expect(page.locator('.inspector')).toBeVisible()
+  await expect(page.locator('.app-shell')).toHaveClass(/has-inspector/)
+  await expect(page.locator('.inspector-content')).toBeVisible()
+  await page.locator('.inspector').getByRole('button', { name: '关闭右侧边栏' }).click()
+  await expect(page.locator('.inspector')).toHaveCount(0)
+  await expect(page.locator('.app-shell')).not.toHaveClass(/has-inspector/)
+  await page.getByRole('button', { name: '文档大纲' }).click()
+  await expect(page.locator('.inspector')).toBeVisible()
 
   await page.screenshot({ path: '/tmp/seermarkdown-sidebar.png', fullPage: true })
 
