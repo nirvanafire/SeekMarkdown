@@ -22,6 +22,7 @@ import {
   ListTodo,
   ListVideo,
   Minus,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   MessageSquareText,
@@ -113,6 +114,19 @@ const readingListStorageKey = 'seermarkdown.reading-list'
 const positionStorageKey = 'seermarkdown.file-positions'
 const bookmarkStorageKey = 'seermarkdown.bookmarks'
 const annotationStorageKey = 'seermarkdown.annotations'
+const uiStyleStorageKey = 'seermarkdown.ui-style'
+
+type UiStyle = 'codex' | 'neumorphic'
+
+function readUiStyle(): UiStyle {
+  try {
+    return window.localStorage.getItem(uiStyleStorageKey) === 'neumorphic'
+      ? 'neumorphic'
+      : 'codex'
+  } catch {
+    return 'codex'
+  }
+}
 
 function formatReadingTime(minutes: number): string {
   if (minutes < 1) {
@@ -288,6 +302,7 @@ function OutlineTree({
 }
 
 export default function App(): JSX.Element {
+  const [uiStyle, setUiStyle] = useState<UiStyle>(readUiStyle)
   const [file, setFile] = useState<OpenedFile | null>(null)
   const [content, setContent] = useState('')
   const [savedContent, setSavedContent] = useState('')
@@ -873,6 +888,14 @@ export default function App(): JSX.Element {
   }, [annotations])
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(uiStyleStorageKey, uiStyle)
+    } catch {
+      // UI style remains available for this session when storage is unavailable.
+    }
+  }, [uiStyle])
+
+  useEffect(() => {
     const handleSearchShortcut = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier || event.key.toLowerCase() !== 'f') {
@@ -1140,6 +1163,7 @@ export default function App(): JSX.Element {
       className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${
         inspectorVisible ? 'has-inspector' : ''
       }`}
+      data-ui-theme={uiStyle}
       onDragEnter={handleFileDragEnter}
       onDragOver={handleFileDragOver}
       onDragLeave={handleFileDragLeave}
@@ -1229,6 +1253,15 @@ export default function App(): JSX.Element {
             </div>
           )}
         </NeuPanel>
+        <NeuIconButton
+          className="ui-style-switch"
+          label="切换界面风格"
+          title="切换界面风格"
+          onClick={() => setUiStyle((value) => (value === 'codex' ? 'neumorphic' : 'codex'))}
+        >
+          <Palette aria-hidden="true" />
+          {!sidebarCollapsed && <span>{uiStyle === 'codex' ? '客户端风格' : '拟物风格'}</span>}
+        </NeuIconButton>
       </NeuPanel>
 
       <main className="workspace workspace--single-panel">

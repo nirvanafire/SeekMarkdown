@@ -69,8 +69,8 @@ const syntaxStyle = HighlightStyle.define([
 const editorTheme = EditorView.theme({
   '&': {
     height: '100%',
-    backgroundColor: '#f2efe8',
-    color: '#2a332e'
+    backgroundColor: 'var(--editor-bg, #f2efe8)',
+    color: 'var(--editor-ink, #2a332e)'
   },
   '.cm-scroller': {
     fontFamily: '"IBM Plex Mono", "SFMono-Regular", Consolas, monospace',
@@ -79,7 +79,7 @@ const editorTheme = EditorView.theme({
     padding: '22px 0 72px'
   },
   '.cm-content': {
-    caretColor: '#b84432',
+    caretColor: 'var(--editor-accent, #b84432)',
     paddingLeft: '22px',
     paddingRight: '28px'
   },
@@ -87,9 +87,9 @@ const editorTheme = EditorView.theme({
     padding: '0 4px 0 10px'
   },
   '.cm-gutters': {
-    backgroundColor: '#e6e2da',
-    color: '#858c86',
-    borderRight: '1px solid rgba(104, 95, 81, 0.14)',
+    backgroundColor: 'var(--editor-line, #e6e2da)',
+    color: 'var(--editor-muted, #858c86)',
+    borderRight: '1px solid var(--editor-line, rgba(104, 95, 81, 0.14))',
     userSelect: 'none'
   },
   '.cm-lineNumbers .cm-gutterElement': {
@@ -97,24 +97,24 @@ const editorTheme = EditorView.theme({
     minWidth: '44px'
   },
   '.cm-activeLine': {
-    backgroundColor: '#eae6de'
+    backgroundColor: 'var(--editor-active-line, #eae6de)'
   },
   '.cm-activeLineGutter': {
-    backgroundColor: '#ddd8cf',
-    color: '#a6402f'
+    backgroundColor: 'var(--editor-active-line, #ddd8cf)',
+    color: 'var(--editor-accent-dark, #a6402f)'
   },
   '&.cm-focused': {
     outline: 'none'
   },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: '#cbd9d1'
+    backgroundColor: 'var(--editor-selection, #cbd9d1)'
   },
   '.cm-cursor': {
-    borderLeftColor: '#b84432',
+    borderLeftColor: 'var(--editor-accent, #b84432)',
     borderLeftWidth: '2px'
   },
   '.cm-placeholder': {
-    color: '#929891'
+    color: 'var(--editor-muted, #929891)'
   }
 })
 

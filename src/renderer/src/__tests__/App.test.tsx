@@ -119,6 +119,23 @@ describe('App', () => {
     expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0)
   })
 
+  it('uses the Codex client UI style by default', () => {
+    render(<App />)
+
+    expect(document.querySelector('.app-shell')).toHaveAttribute('data-ui-theme', 'codex')
+    expect(screen.getByRole('button', { name: '切换界面风格' })).toHaveTextContent('客户端风格')
+  })
+
+  it('switches and persists the UI style', async () => {
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '切换界面风格' }))
+
+    expect(document.querySelector('.app-shell')).toHaveAttribute('data-ui-theme', 'neumorphic')
+    expect(screen.getByRole('button', { name: '切换界面风格' })).toHaveTextContent('拟物风格')
+    expect(window.localStorage.getItem('seermarkdown.ui-style')).toBe('neumorphic')
+  })
+
   it('shows file history in reverse chronological order and opens an entry', async () => {
     const storedHistory = [
       { path: '/tmp/new.md', name: 'new.md', openedAt: 2000 },

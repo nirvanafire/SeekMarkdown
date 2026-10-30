@@ -1,0 +1,281 @@
+.app-shell[data-ui-theme='codex'] {
+  --codex-canvas: #f3f1ec;
+  --codex-paper: #fffefa;
+  --codex-paper-muted: #ebe8e2;
+  --codex-ink: #25231f;
+  --codex-muted: #716c64;
+  --codex-line: rgba(37, 35, 31, 0.13);
+  --codex-accent: #d5573b;
+  --codex-accent-dark: #a43d29;
+  --editor-bg: var(--codex-paper);
+  --editor-ink: var(--codex-ink);
+  --editor-muted: var(--codex-muted);
+  --editor-line: var(--codex-line);
+  --editor-accent: var(--codex-accent);
+  --editor-accent-dark: var(--codex-accent-dark);
+  --editor-active-line: rgba(37, 35, 31, 0.035);
+  --editor-selection: rgba(213, 87, 59, 0.18);
+  --neu-base: var(--codex-paper-muted);
+  --neu-base-light: #f7f5f0;
+  --neu-base-dark: #d7d3cc;
+  --neu-surface: var(--codex-paper);
+  --neu-surface-strong: #fffefa;
+  --neu-ink: var(--codex-ink);
+  --neu-muted: var(--codex-muted);
+  --neu-faint: #99938a;
+  --neu-accent: var(--codex-accent);
+  --neu-accent-dark: var(--codex-accent-dark);
+  --neu-sage: #537160;
+  --neu-gold: #a87432;
+  --neu-error: #bd4437;
+  --neu-highlight: rgba(255, 255, 255, 0);
+  --neu-soft-highlight: rgba(255, 255, 255, 0);
+  --neu-shadow: rgba(34, 29, 23, 0.09);
+  --neu-shadow-strong: rgba(34, 29, 23, 0.14);
+  --neu-inset-shadow: rgba(34, 29, 23, 0.08);
+  --neu-border: var(--codex-line);
+  --neu-raised: 0 12px 30px rgba(44, 37, 29, 0.08);
+  --neu-raised-strong: 0 18px 48px rgba(44, 37, 29, 0.14);
+  --neu-inset: none;
+  --neu-button-shadow: 0 3px 10px rgba(44, 37, 29, 0.08);
+  --neu-button-active: inset 0 1px 3px rgba(44, 37, 29, 0.12);
+  --line: var(--codex-line);
+  --line-dark: rgba(37, 35, 31, 0.2);
+  --shadow: 0 18px 42px rgba(44, 37, 29, 0.12);
+  background: var(--codex-canvas);
+}
+
+.app-shell[data-ui-theme='codex'] .window-drag-region,
+.app-shell[data-ui-theme='codex'] .sidebar,
+.app-shell[data-ui-theme='codex'] .inspector {
+  --neu-base: #252421;
+  --neu-base-light: #37342f;
+  --neu-base-dark: #1b1a18;
+  --neu-surface: #2d2b27;
+  --neu-surface-strong: #37342f;
+  --neu-ink: #f4f1eb;
+  --neu-muted: #b9b2a8;
+  --neu-faint: #847d73;
+  --neu-accent: #e36a4c;
+  --neu-accent-dark: #f18a70;
+  --neu-sage: #9bb9aa;
+  --neu-gold: #d6a35e;
+  --neu-border: rgba(255, 255, 255, 0.11);
+  --neu-shadow: rgba(0, 0, 0, 0.18);
+  --neu-shadow-strong: rgba(0, 0, 0, 0.25);
+  --neu-inset-shadow: rgba(0, 0, 0, 0.18);
+  --neu-highlight: rgba(255, 255, 255, 0.03);
+  --neu-soft-highlight: rgba(255, 255, 255, 0.03);
+  --neu-raised: none;
+  --neu-raised-strong: 0 18px 48px rgba(17, 15, 13, 0.22);
+  --neu-inset: none;
+  --neu-button-shadow: none;
+  --neu-button-active: inset 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.app-shell[data-ui-theme='codex'] .window-drag-region {
+  background: #252421;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-ui-theme='codex'] .sidebar {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .inspector {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .sidebar-document,
+.app-shell[data-ui-theme='codex'] .sidebar-status {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .sidebar-section h2,
+.app-shell[data-ui-theme='codex'] .sidebar-status-heading,
+.app-shell[data-ui-theme='codex'] .sidebar-metrics {
+  color: #a9a197;
+}
+
+.app-shell[data-ui-theme='codex'] .brand-mark {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .brand-name span {
+  color: #f18a70;
+}
+
+.app-shell[data-ui-theme='codex'] .neu-button,
+.app-shell[data-ui-theme='codex'] .neu-icon-button,
+.app-shell[data-ui-theme='codex'] .history-item,
+.app-shell[data-ui-theme='codex'] .mark-item,
+.app-shell[data-ui-theme='codex'] .annotation-draft,
+.app-shell[data-ui-theme='codex'] .search-field {
+  border-color: var(--codex-line);
+  border-radius: 6px;
+}
+
+.app-shell[data-ui-theme='codex'] .neu-button,
+.app-shell[data-ui-theme='codex'] .neu-icon-button {
+  box-shadow: var(--neu-button-shadow);
+}
+
+.app-shell[data-ui-theme='codex'] .neu-button:hover:not(:disabled),
+.app-shell[data-ui-theme='codex'] .neu-icon-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: 0 5px 14px rgba(44, 37, 29, 0.11);
+}
+
+.app-shell[data-ui-theme='codex'] .neu-button--primary {
+  border-color: var(--codex-accent-dark);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .neu-button--danger {
+  color: var(--codex-accent-dark);
+  background: #f5e9e5;
+}
+
+.app-shell[data-ui-theme='codex'] .sidebar-actions .neu-icon-button,
+.app-shell[data-ui-theme='codex'] .format-control {
+  border-radius: 6px;
+}
+
+.app-shell[data-ui-theme='codex'] .ui-style-switch {
+  display: inline-flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 0 12px;
+  color: var(--neu-muted);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .ui-style-switch:hover {
+  color: var(--neu-ink);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .ui-style-switch span {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell[data-ui-theme='codex'].sidebar-collapsed .ui-style-switch {
+  width: 42px;
+  padding: 0;
+  justify-content: center;
+}
+
+.app-shell[data-ui-theme='codex'] .workspace {
+  gap: 12px;
+  padding: 12px;
+  background: var(--codex-canvas);
+}
+
+.app-shell[data-ui-theme='codex'] .editor-panel {
+  border-color: var(--codex-line);
+  border-radius: 10px;
+  background: var(--codex-paper);
+  box-shadow: 0 10px 28px rgba(44, 37, 29, 0.06);
+}
+
+.app-shell[data-ui-theme='codex'] .panel-heading {
+  min-height: 42px;
+  background: #f1efea;
+  border-bottom-color: var(--codex-line);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .editor-toolbar-actions {
+  border-left-color: var(--codex-line);
+}
+
+.app-shell[data-ui-theme='codex'] .editor-toolbar .neu-icon-button:hover,
+.app-shell[data-ui-theme='codex'] .editor-toolbar .neu-icon-button:active {
+  background: var(--codex-paper-muted);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .code-editor--unified .cm-content {
+  color: var(--codex-ink);
+}
+
+.app-shell[data-ui-theme='codex'] .code-editor--unified .cm-unified-code-widget,
+.app-shell[data-ui-theme='codex'] .code-editor--unified .cm-unified-table-widget,
+.app-shell[data-ui-theme='codex'] .image-fallback,
+.app-shell[data-ui-theme='codex'] .annotation-draft,
+.app-shell[data-ui-theme='codex'] .mark-item,
+.app-shell[data-ui-theme='codex'] .history-item,
+.app-shell[data-ui-theme='codex'] .search-field {
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .code-editor--unified .cm-unified-code-widget,
+.app-shell[data-ui-theme='codex'] .code-editor--unified .cm-unified-table-widget {
+  border-color: var(--codex-line);
+  border-radius: 6px;
+}
+
+.app-shell[data-ui-theme='codex'] .code-editor--unified .unified-task-checkbox {
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .status-bar {
+  color: var(--codex-muted);
+}
+
+.app-shell[data-ui-theme='codex'] .status-separator {
+  background: var(--codex-line);
+}
+
+.app-shell[data-ui-theme='codex'] .toast,
+.app-shell[data-ui-theme='codex'] .confirm-dialog,
+.app-shell[data-ui-theme='codex'] .history-dialog {
+  border: 1px solid var(--codex-line);
+  border-radius: 8px;
+  background: var(--codex-paper);
+  box-shadow: 0 22px 64px rgba(24, 20, 16, 0.2);
+}
+
+.app-shell[data-ui-theme='codex'] .modal-backdrop {
+  background: rgba(25, 22, 18, 0.42);
+}
+
+.app-shell[data-ui-theme='codex'] .dialog-accent {
+  background: var(--codex-accent);
+}
+
+.app-shell[data-ui-theme='codex'] .search-console {
+  border: 1px solid var(--codex-line);
+  border-radius: 8px;
+  background: var(--codex-paper);
+  box-shadow: 0 18px 48px rgba(24, 20, 16, 0.18);
+}
+
+.app-shell[data-ui-theme='codex'] .drop-overlay,
+.app-shell[data-ui-theme='codex'] .reading-list-drop-overlay {
+  background: rgba(255, 254, 250, 0.94);
+  border-color: var(--codex-accent);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-theme='codex'] .reading-list-current {
+  border-radius: 4px;
+}
